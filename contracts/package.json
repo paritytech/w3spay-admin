@@ -1,0 +1,42 @@
+{
+  "name": "w3spay-contracts",
+  "version": "0.1.0",
+  "description": "W3SPay Merchant Registry smart contract for Polkadot Asset Hub (pallet-revive).",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "deploy": "hardhat compile && tsx scripts/deploy-registry.ts",
+    "deploy:paseo-next-v2": "hardhat compile && tsx scripts/deploy-registry.ts --env paseo-next-v2",
+    "deploy:previewnet": "hardhat compile && tsx scripts/deploy-registry.ts --env previewnet",
+    "registry:add-admin": "hardhat compile && tsx scripts/w3spay-add-registry-admin.ts",
+    "registry:register": "hardhat compile && tsx scripts/w3spay-register-merchant.ts",
+    "registry:update": "hardhat compile && tsx scripts/w3spay-update-merchant.ts",
+    "registry:set-destination": "hardhat compile && tsx scripts/w3spay-set-merchant-destination.ts",
+    "registry:set-status": "hardhat compile && tsx scripts/w3spay-set-merchant-status.ts",
+    "registry:remove": "hardhat compile && tsx scripts/w3spay-remove-merchant.ts",
+    "registry:list": "hardhat compile && tsx scripts/w3spay-list-merchants.ts",
+    "registry:upsert-item-config": "hardhat compile && tsx scripts/w3spay-upsert-item-config.ts",
+    "registry:list-item-configs": "hardhat compile && tsx scripts/w3spay-list-item-configs.ts",
+    "list": "npm run registry:list",
+    "node": "hardhat node",
+    "clean": "hardhat clean"
+  },
+  "keywords": ["polkadot", "smart-contracts", "registry", "w3spay", "pos", "payments"],
+  "author": "W3SPay Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@parity/hardhat-polkadot": "^0.2.7",
+    "@parity/resolc": "^0.2.0",
+    "@polkadot-api/substrate-bindings": "^0.20.1",
+    "@polkadot-api/ws-provider": "^0.9.0",
+    "@polkadot-labs/hdkd": "^0.0.27",
+    "@polkadot-labs/hdkd-helpers": "^0.0.28",
+    "hardhat": "^2.28.4",
+    "polkadot-api": "^2.1.2",
+    "tsx": "^4.8.1",
+    "viem": "^2.46.2"
+  }
+}

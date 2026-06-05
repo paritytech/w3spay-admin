@@ -1,0 +1,101 @@
+/*
+ * W3sPay admin — global styling.
+ *
+ * Mobile-first PWA. The app fills the viewport on a phone and centers
+ * inside a 430px column on a wide screen so the inner layout stays
+ * phone-shaped without the bezel chrome of the design canvas. Inner
+ * surfaces (cards, buttons, headings) own their own inline styling;
+ * this sheet only handles the host/document chrome.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  background: #0f0f0f;
+  color: #fafaf9;
+  min-height: 100%;
+}
+
+body {
+  font: 400 14px/1.5 'DM Sans', -apple-system, system-ui, sans-serif;
+  font-feature-settings: 'liga' 1, 'calt' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  min-height: 100dvh;
+  /* Lock the document; AFrame owns its own internal scroll. */
+  overscroll-behavior: none;
+}
+
+#root {
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+}
+
+/* Phone-shaped column. On real phones this is the whole viewport; on a
+   desktop browser the app sits centered in a 430px column so the layout
+   still reads correctly. */
+.workspace {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #0f0f0f;
+}
+
+/* Visible boundary when there's room — the only concession to the
+   "phone in a desktop browser" case. On phones the viewport === workspace
+   so the box-shadow falls outside the visible area. */
+@media (min-width: 480px) {
+  body {
+    background:
+      radial-gradient(60% 80% at 70% 50%, #1a1612 0%, #0a0908 80%);
+  }
+  .workspace {
+    box-shadow: 0 0 0 1px #1c1917, 0 30px 60px rgba(0, 0, 0, 0.45);
+  }
+}
+
+.admin-frame {
+  /* Root mobile frame — AFrame owns flex layout + safe-area insets
+     inline; this class is here so global styles can target it without
+     reaching through arbitrary inline `style` shapes. */
+  flex: 1;
+}
+
+/* ── Animations ─────────────────────────────────────────────── */
+
+@keyframes w3-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes w3-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes w3-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}

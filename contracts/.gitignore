@@ -1,0 +1,15 @@
+# Hardhat / resolc build artifacts
+node_modules/
+cache/
+artifacts/
+typechain-types/
+coverage/
+coverage.json
+
+# Ignition deployments — also gitignored at repo root.
+ignition/deployments/
+deployments/
+.env
+
+# Editor / OS
+.DS_Store

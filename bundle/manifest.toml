@@ -1,0 +1,35 @@
+[app]
+id = "w3spayadmin.dot"
+name = "W3sPay Admin"
+version = "0.1.0"
+app_type = "spa"
+
+[webapp]
+entry = "index.html"
+sandbox = "strict"
+
+# NOTE: capabilities are declared ONLY via [extensions].use_extensions below.
+# There is no [permissions] manifest section — the host parser rejects unknown
+# sections, which makes it skip wiring host.browser.bridge (the account
+# transport). The handshake then never gets a response and every host-API call
+# (getProductAccount, requestLogin) fails with "Polkadot host is not ready".
+# Admin pilot console — drives the W3SPay merchant registry on chain.
+#
+# Asset Hub reads/writes go through a direct WebSocket to Paseo Asset Hub
+# (see apps/w3spay-admin/src/host/chain-client.ts and the t3rminal-v1
+# workaround in apps/t3rminal-v1/lib/host/provider.ts). Signing for those
+# extrinsics flows through the host product-account signer over
+# host.browser.bridge, and host.api carries the runtime permission
+# requests (e.g. ChainSubmit, PreimageSubmit).
+#
+# Bulletin Chain publish is delegated to the host via
+# `preimageManager.submit` (host.api → host_preimage_submit). The host
+# (Polkadot Desktop / dotli) holds the Bulletin Chain authorization and
+# signs `TransactionStorage.store` with its own account, so the admin's
+# product account never needs a per-deployment bulletin authorization.
+#
+# Trimmed vs the cashier manifest: no payments, no camera, no balance UI
+# of its own, so `host.coinpayment`, `host.media`, and `host.balance` are
+# not requested.
+[extensions]
+use_extensions = ["host.data", "host.browser.bridge", "host.api"]

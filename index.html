@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0f0f0f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="description" content="W3sPay pilot admin console — register merchant terminals on chain, manage lifecycle status." />
+    <title>W3sPay Admin</title>
+    <!--
+      `global` polyfill — MUST stay a classic (non-module) inline script so
+      it runs before the deferred module bundle evaluates.
+
+      The `collections` package (pulled in transitively via
+      `@bcts/multipart-ur` → `@bcts/uniform-resources` → `@bcts/dcbor`)
+      references the Node-only `global` identifier at module top level
+      (`global.Set`, `global.Map`, `global.DOMTokenList`) with no `typeof`
+      guard. Vite's `define: { global: "globalThis" }` rewrites the app's
+      own ESM refs but does NOT reach this CommonJS dep in the production
+      (Rollup) build, so the built bundle keeps raw `global.*` and throws
+      `global is not defined` before React mounts — i.e. a blank screen.
+      Aliasing `global` to the window here makes those refs resolve.
+      ES3 syntax only: this must parse on every engine, including old iOS.
+    -->
+    <script>window.global = window.global || window;</script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
