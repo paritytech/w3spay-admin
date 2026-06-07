@@ -18,7 +18,6 @@ import {
 } from "@shared/api/host";
 
 import { envConfig } from "@shared/config.ts";
-import { isInHost } from "./host-connection.ts";
 
 /**
  * Get (or create) the shared Paseo Asset Hub Next PAPI client. Idempotent;
@@ -37,7 +36,7 @@ import { isInHost } from "./host-connection.ts";
 export function useMainClient() {
   const network = resolveNetwork(envConfig.chain.network);
   const genesis = network.mainChain.genesisHash as `0x${string}`;
-  const client = getOrCreateClient(genesis, network.mainChain.wsUrl, isInHost, "auto");
+  const client = getOrCreateClient(genesis, network.mainChain.wsUrl);
   return {
     client,
     unsafeApi: client.getUnsafeApi(),
@@ -63,8 +62,6 @@ export function usePeopleClient() {
   const client = getOrCreateClient(
     people.genesisHash as `0x${string}`,
     people.wsUrl,
-    isInHost,
-    "auto",
   );
   return {
     client,

@@ -1,3 +1,4 @@
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 /// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -20,7 +21,10 @@ export default defineConfig({
   define: {
     global: "globalThis",
   },
-  plugins: [react()],
+  plugins: [react(), sentryVitePlugin({
+    org: "paritytech",
+    project: "w3spay"
+  })],
   resolve: {
     alias: {
       "@": srcPath("./src"),
@@ -31,6 +35,7 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
+    sourcemap: true
   },
   esbuild: {
     target: "es2022",

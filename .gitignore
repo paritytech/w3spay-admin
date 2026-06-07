@@ -1,6 +1,7 @@
 # dependencies
 node_modules/
-
+.agents
+skills-lock.json
 # build output
 dist/
 build/
@@ -39,3 +40,6 @@ out.bulletin.car
 
 # Vendored product-sdk tarballs ARE committed on purpose — they pin the
 # host SDK surface w3spay-admin was built against. Do not add tools/ here.
+
+# Sentry Config File
+.env.sentry-build-plugin
