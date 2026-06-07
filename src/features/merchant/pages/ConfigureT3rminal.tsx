@@ -40,19 +40,19 @@ import {
   renderUrQr,
 } from "@bcts/multipart-ur";
 
-import { resolveEffectiveRegistryAddress } from "@shared/demo/demo-contracts.ts";
-import { useSession } from "@features/session/api/use-session.ts";
+import { resolveEffectiveRegistryAddress } from "@shared/lib/demo/demo-contracts.ts";
+import { useSession } from "@features/session/contracts/use-session.ts";
 import { useFeedbackStore } from "@shared/store/use-feedback-store.ts";
-import { useMerchants } from "@features/merchant/api/use-merchants.ts";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
-import { useItemConfigs } from "@features/items/api/use-item-configs.ts";
+import { useItemConfigs } from "@features/items/contracts/use-item-configs.ts";
 import { useT3rminalAssignments } from "@shared/store/use-assignments-store.ts";
 import type { UseT3rminalAssignmentsResult } from "@shared/store/t3rminal-assignments.ts";
 import { useRestaurants } from "@features/restaurants/store/use-restaurants-store.ts";
 import {
   buildT3rminalConfigPayloadV2,
   encodeT3rminalConfigPayloadV2,
-} from "@shared/utils/t3rminal-config-qr.ts";
+} from "@shared/lib/t3rminal-config-qr.ts";
 import { isConfigDirty } from "@features/items/item-config-drafts.ts";
 import { shortAddr, type AdminMerchant } from "@features/merchant/merchant-model.ts";
 import {
@@ -60,7 +60,7 @@ import {
   type Restaurant,
   type UseRestaurantsResult,
 } from "@features/restaurants/restaurants.ts";
-import type { MerchantProfile } from "@/shared/config-qr";
+import type { MerchantProfile } from "@/shared/lib/config-qr";
 import type { UseItemConfigsResult } from "@features/items/item-configs.ts";
 import { CopyableRow } from "@shared/components/CopyableRow.tsx";
 import { Icon } from "@shared/components/Icon.tsx";

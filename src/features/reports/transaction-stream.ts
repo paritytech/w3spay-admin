@@ -196,7 +196,7 @@ function parseAmountFormatted(raw: string): number | null {
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
-import type { ReportIndexEntry } from "@features/reports/api/bulletin-index-read.ts";
+import type { ReportIndexEntry } from "@features/reports/contracts/bulletin-index-read.ts";
 
 export interface TransactionsStreamTerminal {
   readonly terminal: TerminalRef;

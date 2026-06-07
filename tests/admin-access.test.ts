@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { envConfig } from "@shared/config.ts";
+import { envConfig } from "@shared/config";
 import { getAdminProductIdentifier } from "@shared/utils/get-admin-product-id.ts";
 import {
   InvalidAdminAddressError,
@@ -16,14 +16,14 @@ import {
   normalizeMerchantDestinationInput,
   publicKeyToSs58,
   deriveH160,
-} from "@shared/utils/address.ts";
+} from "@shared/lib/address.ts";
 import { shortenAddress } from "@shared/utils/format.ts";
 import {
   buildAdminGrantIdentity,
   selectAdminCopyTarget,
 } from "@features/session/account.ts";
 import { withTimeout } from "@shared/utils/with-timeout.ts";
-import { detectHostEnvironment } from "@shared/api/host-connection.ts";
+import { detectHostEnvironment } from "@shared/chain/host-connection.ts";
 import { AdminAccess, AdminAccountCard } from "@features/session/pages/AdminAccess.tsx";
 
 const PUBLIC_KEY_HEX = "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";

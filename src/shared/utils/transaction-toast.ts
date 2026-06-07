@@ -1,5 +1,5 @@
 import type { ToastOptions } from "@shared/store/use-feedback-store.ts";
-import type { TxStatus } from "@/shared/api/contracts";
+import type { TxStatus } from "@/shared/chain/contracts";
 
 export type TransactionToast = (
   msg: string,

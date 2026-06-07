@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type * as HostConnectionModule from "@shared/api/host-connection.ts";
+import type * as HostConnectionModule from "@shared/chain/host-connection.ts";
 
 import {
   applyDelete,
@@ -10,11 +10,11 @@ import {
   DemoMerchantDuplicateError,
   DemoMerchantNotFoundError,
   synthesizeTxHash,
-} from "@shared/demo/demo-actions.ts";
-import { getDemoTokenBalance } from "@shared/demo/demo-balances.ts";
-import { DEMO_MERCHANT_SEED } from "@shared/demo/demo-merchants.ts";
+} from "@shared/lib/demo/demo-actions.ts";
+import { getDemoTokenBalance } from "@shared/lib/demo/demo-balances.ts";
+import { DEMO_MERCHANT_SEED } from "@shared/lib/demo/demo-merchants.ts";
 import { merchantFromRegistryRow, type RegistryMerchantRow } from "@features/merchant/merchant-model.ts";
-import { isAccountId32Hex, type AccountId32Hex } from "@shared/utils/address.ts";
+import { isAccountId32Hex, type AccountId32Hex } from "@shared/lib/address.ts";
 
 // `isDemoMode()` reads `envConfig.features.demoMode` and `isInHost()`.
 // We mock both so the test exercises each branch of the flag matrix in
@@ -33,12 +33,12 @@ const configHolder: {
   contracts: { merchantRegistryAddress: "0x1234567890abcdef1234567890abcdef12345678" },
 };
 
-vi.mock("@shared/config.ts", () => ({
+vi.mock("@shared/config", () => ({
   get envConfig() {
     return configHolder;
   },
 }));
-vi.mock("@shared/api/host-connection.ts", async (importOriginal) => {
+vi.mock("@shared/chain/host-connection.ts", async (importOriginal) => {
   // We only want to override `detectHostEnvironment`/`isInHost` so
   // `isDemoMode()` can be steered; the rest of the module stays out of
   // the test path because nothing in this file pulls those exports.
@@ -59,9 +59,9 @@ vi.mock("@shared/api/host-connection.ts", async (importOriginal) => {
 });
 
 // Deferred imports: demo-mode modules must observe the config/host mocks above.
-const { isDemoMode } = await import("@shared/api/host-connection.ts");
+const { isDemoMode } = await import("@shared/chain/host-connection.ts");
 const { DEMO_REGISTRY_ADDRESS, resolveEffectiveRegistryAddress } = await import(
-  "@shared/demo/demo-contracts.ts"
+  "@shared/lib/demo/demo-contracts.ts"
 );
 
 beforeEach(() => {

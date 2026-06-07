@@ -12,8 +12,8 @@
 
 import { useState } from "react";
 
-import { useMerchants } from "@features/merchant/api/use-merchants.ts";
-import { useCanWriteMerchants } from "@features/merchant/api/use-merchant-write-ops.ts";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
+import { useCanWriteMerchants } from "@features/merchant/contracts/use-merchant-write-ops.ts";
 import { useNavigate } from "@tanstack/react-router";
 import { Icon } from "@shared/components/Icon.tsx";
 import { AHead, APrimary, type Density } from "@shared/components/primitives.tsx";

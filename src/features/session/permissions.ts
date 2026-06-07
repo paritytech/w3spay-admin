@@ -18,7 +18,7 @@
  * RemotePermission enum surface; there is no `ChainRead` variant.
  */
 
-import { enumValue, hostApi, requestPermission } from "@/shared/api/host";
+import { enumValue, hostApi, requestPermission } from "@/shared/chain/host";
 
 /**
  * Outcome of `host_feature_supported(Chain, genesisHash)`.

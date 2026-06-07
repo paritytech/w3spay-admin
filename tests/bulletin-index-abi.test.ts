@@ -17,8 +17,8 @@
 import { describe, expect, it } from "vitest";
 import { ethers } from "ethers";
 
-import { T3rminalBulletinIndexABI } from "@features/reports/api/bulletin-index-abi.ts";
-import { W3SPayMerchantRegistryABI } from "@shared/api/registry-abi.ts";
+import { T3rminalBulletinIndexABI } from "@features/reports/contracts/bulletin-index-abi.ts";
+import { W3SPayMerchantRegistryABI } from "@shared/chain/registry-abi.ts";
 
 const iface = new ethers.Interface(T3rminalBulletinIndexABI);
 const registryIface = new ethers.Interface(W3SPayMerchantRegistryABI);

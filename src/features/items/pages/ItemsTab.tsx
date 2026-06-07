@@ -17,7 +17,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Icon } from "@shared/components/Icon.tsx";
 import { APrimary, ASecondary } from "@shared/components/primitives.tsx";
 import { COLOR } from "@shared/components/tokens.ts";
-import { useItemConfigs } from "@features/items/api/use-item-configs.ts";
+import { useItemConfigs } from "@features/items/contracts/use-item-configs.ts";
 import type { UseItemConfigsResult } from "@features/items/item-configs.ts";
 import { ItemsList, ItemsListSkeleton } from "@features/items/components/ItemsList.tsx";
 import { ItemsNewConfig, BLANK_NEW_CONFIG, type NewConfigForm } from "@features/items/components/ItemsNewConfig.tsx";

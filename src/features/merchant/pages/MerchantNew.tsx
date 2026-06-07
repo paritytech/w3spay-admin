@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from "react";
 
-import { useMerchantWriteOps } from "@features/merchant/api/use-merchant-write-ops.ts";
+import { useMerchantWriteOps } from "@features/merchant/contracts/use-merchant-write-ops.ts";
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { Icon } from "@shared/components/Icon.tsx";
 import {

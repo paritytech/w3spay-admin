@@ -13,7 +13,7 @@ import type { T3rminalAssignmentV1 } from "@shared/store/t3rminal-assignments.ts
 import { useNavigate } from "@tanstack/react-router";
 import type {
   TerminalReportIndex,
-} from "@features/reports/api/bulletin-index-read.ts";
+} from "@features/reports/contracts/bulletin-index-read.ts";
 import { ACard } from "@shared/components/primitives.tsx";
 import { COLOR } from "@shared/components/tokens.ts";
 import { ReportTerminalRow } from "./ReportTerminalRow.tsx";

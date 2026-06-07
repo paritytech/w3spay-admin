@@ -3,7 +3,7 @@
  * surfaces the encrypted payload via the detail panel.
  */
 
-import type { ReportIndexEntry } from "@features/reports/api/bulletin-index-read.ts";
+import type { ReportIndexEntry } from "@features/reports/contracts/bulletin-index-read.ts";
 import { shortAddr } from "@features/merchant/merchant-model.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import { ACard, AMono } from "@shared/components/primitives.tsx";

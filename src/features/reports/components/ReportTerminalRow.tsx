@@ -8,7 +8,7 @@
  */
 
 import { type AdminMerchant } from "@features/merchant/merchant-model.ts";
-import type { TerminalReportIndex } from "@features/reports/api/bulletin-index-read.ts";
+import type { TerminalReportIndex } from "@features/reports/contracts/bulletin-index-read.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import { ACard, AMono, AStatus } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";

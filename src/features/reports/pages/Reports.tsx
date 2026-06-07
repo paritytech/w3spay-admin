@@ -15,13 +15,13 @@
 
 import { useMemo, useState } from "react";
 
-import { useMerchants } from "@features/merchant/api/use-merchants.ts";
-import { envConfig } from "@shared/config.ts";
-import { resolveNetwork } from "@shared/api/host";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
+import { envConfig } from "@shared/config";
+import { resolveNetwork } from "@shared/chain/host";
 import {
   useAllTerminalReportIndices,
   type TerminalReportIndex,
-} from "@features/reports/api/report-index-queries.ts";
+} from "@features/reports/contracts/report-index-queries.ts";
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import { useT3rminalAssignments } from "@shared/store/use-assignments-store.ts";
 import type { TransactionsStreamTerminal } from "@features/reports/transaction-stream.ts";

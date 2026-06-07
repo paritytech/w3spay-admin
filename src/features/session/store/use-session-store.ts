@@ -16,9 +16,9 @@
  */
 
 import { create } from "zustand";
-import { requestAccessHostWallet, resolveNetwork, retryHostWallet } from "@shared/api/host";
+import { requestAccessHostWallet, resolveNetwork, retryHostWallet } from "@shared/chain/host";
 
-import { envConfig } from "@shared/config.ts";
+import { envConfig } from "@shared/config";
 import type { ProductAccountState, ReadyAdminAccount } from "@features/session/account.ts";
 import {
   type ChainSupport,
@@ -27,7 +27,7 @@ import {
 import {
   resolveHostPermissions,
   type HostPermissionsSnapshot,
-} from "@features/session/api/probe-permissions.ts";
+} from "@features/session/contracts/probe-permissions.ts";
 
 export interface SessionState {
   readonly accountState: ProductAccountState;

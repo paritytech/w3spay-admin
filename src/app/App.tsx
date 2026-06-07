@@ -9,7 +9,7 @@
 
 import { RouterProvider } from "@tanstack/react-router";
 
-import { journeyTracker } from "@shared/utils/telemetry.ts";
+import { journeyTracker } from "@shared/lib/telemetry.ts";
 import { AppProviders } from "./providers.tsx";
 import { router } from "./router/index.tsx";
 import { TelemetryTestScreen, isTelemetryTestRoute } from "./TelemetryTest.tsx";

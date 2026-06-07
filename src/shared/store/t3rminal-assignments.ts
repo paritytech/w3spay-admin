@@ -9,13 +9,13 @@
  * payloads without inferring from absence-of-fields.
  */
 
-import { bytesToHex, hexToBytes } from "@shared/utils/address.ts";
+import { bytesToHex, hexToBytes } from "@shared/lib/address.ts";
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import type { Item, ItemConfig } from "@features/items/items-model.ts";
 import {
   T3RMINAL_REPORT_PASSWORD_SCHEME_V1,
   createPasswordSeed,
-} from "@shared/utils/t3rminal-config-qr.ts";
+} from "@shared/lib/t3rminal-config-qr.ts";
 
 /** Stable storage key under the admin app's KV prefix. */
 export const T3RMINAL_ASSIGNMENTS_KEY = "t3rminal-assignments/v1" as const;

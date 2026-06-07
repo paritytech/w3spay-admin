@@ -5,7 +5,7 @@ import {
   accountId32ToH160IfLeftPadded,
   type AccountId32Hex,
   type H160Hex,
-} from "@shared/utils/address.ts";
+} from "@shared/lib/address.ts";
 
 export type MerchantLifecycle = "active" | "paused" | "revoked";
 

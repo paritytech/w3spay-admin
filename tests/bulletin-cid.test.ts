@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { blake2b } from "@noble/hashes/blake2.js";
 import { CID } from "multiformats/cid";
 
-import { BLAKE2B_256_CODE, calculateBulletinCid, calculateBulletinCidObject } from "@features/items/api/cid.ts";
+import { BLAKE2B_256_CODE, calculateBulletinCid, calculateBulletinCidObject } from "@features/items/contracts/cid.ts";
 
 const HELLO = new TextEncoder().encode("hello world");
 const EMPTY = new Uint8Array();

@@ -19,7 +19,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { captureError } from "@/shared/telemetry";
+import { captureError } from "@/shared/lib/sentry";
 
 import { cachedAdminKvStore, getAdminKvStore } from "@shared/store/admin-kv.ts";
 import {

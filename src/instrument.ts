@@ -16,10 +16,10 @@
  *      leak the registry contract address + Bulletin gateway).
  */
 
-import { initTelemetry, sentryRemoteOrigins } from "@shared/telemetry";
-import { requestRemoteOriginPermission } from "@shared/api/host/connection.ts";
+import { initTelemetry, sentryRemoteOrigins } from "@shared/lib/sentry";
+import { requestRemoteOriginPermission } from "@shared/chain/host/connection.ts";
 
-import { envConfig } from "@shared/config.ts";
+import { envConfig } from "@shared/config";
 
 const { telemetry } = envConfig;
 

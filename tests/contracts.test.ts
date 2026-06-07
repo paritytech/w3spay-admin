@@ -10,7 +10,7 @@
  *  - Hand-maintained ABI mirror — round-trip the W3SPay-specific entry
  *    points so a typo in `registry-abi.ts` can't silently break a write.
  *
- * `@shared/api/use-client.ts` is mocked so the helpers see a deterministic
+ * `@shared/chain/use-client.ts` is mocked so the helpers see a deterministic
  * fake `PolkadotClient` whose `getUnsafeApi()` returns vitest mocks for
  * the runtime API calls. No real chain RPC is touched.
  */
@@ -19,9 +19,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ethers } from "ethers";
 import { Binary } from "polkadot-api";
 
-import { W3SPayMerchantRegistryABI } from "@shared/api/registry-abi.ts";
-import { listMerchantEntries } from "@features/merchant/api/list-merchant-entries.ts";
-import { envConfig } from "@shared/config.ts";
+import { W3SPayMerchantRegistryABI } from "@shared/chain/registry-abi.ts";
+import { listMerchantEntries } from "@features/merchant/contracts/list-merchant-entries.ts";
+import { envConfig } from "@shared/config";
 
 const REGISTRY_READ_ORIGIN = envConfig.chain.readOnlyOrigin;
 
@@ -29,7 +29,7 @@ const REGISTRY_READ_ORIGIN = envConfig.chain.readOnlyOrigin;
 
 const reviveCall = vi.fn();
 
-vi.mock("@shared/api/use-client.ts", () => ({
+vi.mock("@shared/chain/use-client.ts", () => ({
   useMainClient: () => ({
     client: {
       getUnsafeApi: () => ({

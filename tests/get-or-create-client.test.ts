@@ -34,7 +34,7 @@ vi.mock("polkadot-api", () => ({
   createClient: mocks.createClient,
 }));
 
-import { getOrCreateClient, resetClientCache } from "@shared/api/host/client.ts";
+import { getOrCreateClient, resetClientCache } from "@shared/chain/host/client.ts";
 
 const GENESIS =
   "0xbf0488dbe9daa1de1c08c5f743e26fdc2a4ecd74cf87dd1b4b1eeb99ae4ef19f" as const;

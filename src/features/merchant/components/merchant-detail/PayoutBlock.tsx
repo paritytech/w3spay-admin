@@ -7,7 +7,7 @@
  * when the address overflows the row.
  */
 
-import { useCanWriteMerchants } from "@features/merchant/api/use-merchant-write-ops.ts";
+import { useCanWriteMerchants } from "@features/merchant/contracts/use-merchant-write-ops.ts";
 import { useNavigate } from "@tanstack/react-router";
 import { type AdminMerchant } from "@features/merchant/merchant-model.ts";
 import { Icon } from "@shared/components/Icon.tsx";

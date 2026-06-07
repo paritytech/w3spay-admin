@@ -25,9 +25,9 @@ import {
   deriveReportPassword,
   encodeT3rminalConfigPayload,
   encodeT3rminalConfigPayloadV2,
-} from "@shared/utils/t3rminal-config-qr.ts";
+} from "@shared/lib/t3rminal-config-qr.ts";
 import type { ItemConfig } from "@features/items/items-model.ts";
-import { decodeT3rminalConfigQr } from "@/config-qr";
+import { decodeT3rminalConfigQr } from "@shared/lib/config-qr";
 
 const PUBLIC_KEY = new Uint8Array(32).fill(0xab);
 const SALT_A = new Uint8Array(16).fill(0x01);

@@ -15,15 +15,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { useMerchants } from "@features/merchant/api/use-merchants.ts";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
-import { envConfig } from "@shared/config.ts";
-import { resolveNetwork } from "@shared/api/host";
+import { envConfig } from "@shared/config";
+import { resolveNetwork } from "@shared/chain/host";
 import {
   useT3rminalReportIndex,
   type ReportIndexEntry,
   type TerminalReportIndexState,
-} from "@features/reports/api/report-index-queries.ts";
+} from "@features/reports/contracts/report-index-queries.ts";
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import type { T3rminalAssignmentV1 } from "@shared/store/t3rminal-assignments.ts";
 import { useT3rminalAssignments } from "@shared/store/use-assignments-store.ts";

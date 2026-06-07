@@ -1,4 +1,4 @@
-import type { MerchantRegistryReadState } from "@features/merchant/api/merchant-queries.ts";
+import type { MerchantRegistryReadState } from "@features/merchant/contracts/merchant-queries.ts";
 
 export function RegistryShell({ registry }: { registry: MerchantRegistryReadState }) {
   if (registry.kind === "loading") {

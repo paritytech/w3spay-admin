@@ -14,9 +14,9 @@
 
 import { Outlet } from "@tanstack/react-router";
 
-import { resolveAccessVariant } from "@features/session/api/resolve-access-variant.ts";
-import { useSession } from "@features/session/api/use-session.ts";
-import { useMerchants } from "@features/merchant/api/use-merchants.ts";
+import { resolveAccessVariant } from "@features/session/contracts/resolve-access-variant.ts";
+import { useSession } from "@features/session/contracts/use-session.ts";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
 import { AdminAccess, type AccessVariant } from "@features/session/pages/AdminAccess.tsx";
 import { RegistryShell } from "@features/session/pages/RegistryShell.tsx";
 

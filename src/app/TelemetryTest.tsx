@@ -9,9 +9,9 @@
 import { useState } from "react";
 import * as Sentry from "@sentry/react";
 
-import { breadcrumb, captureError } from "@/shared/telemetry";
+import { breadcrumb, captureError } from "@/shared/lib/sentry";
 
-import { journeyTracker } from "@shared/utils/telemetry.ts";
+import { journeyTracker } from "@shared/lib/telemetry.ts";
 
 export function TelemetryTestScreen() {
   const [log, setLog] = useState<string[]>([]);

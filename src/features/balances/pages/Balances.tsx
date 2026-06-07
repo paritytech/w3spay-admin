@@ -12,10 +12,10 @@
 
 import { useState } from "react";
 
-import { useMerchants } from "@features/merchant/api/use-merchants.ts";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
 import { useNavigate } from "@tanstack/react-router";
-import { useConfig } from "@shared/config.ts";
-import { useTokenBalances } from "@features/balances/api/balance-queries.ts";
+import { useConfig } from "@shared/config";
+import { useTokenBalances } from "@features/balances/contracts/balance-queries.ts";
 import { AHead, type Density } from "@shared/components/primitives.tsx";
 import { Icon } from "@shared/components/Icon.tsx";
 import { COLOR } from "@shared/components/tokens.ts";

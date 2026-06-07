@@ -15,7 +15,7 @@
 
 import { useMemo, useState } from "react";
 
-import { useTransactionsStream } from "@features/reports/api/report-queries.ts";
+import { useTransactionsStream } from "@features/reports/contracts/report-queries.ts";
 import type {
   StreamTransaction,
   StreamWindow,

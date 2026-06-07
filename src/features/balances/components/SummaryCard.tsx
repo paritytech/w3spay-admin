@@ -4,7 +4,7 @@
  * across visible (non-revoked) merchants, and a refresh button.
  */
 
-import { formatTokenAmount } from "@features/balances/api/token-balance.ts";
+import { formatTokenAmount } from "@features/balances/contracts/token-balance.ts";
 import { ACard, ADotted, AEye, AMono } from "@shared/components/primitives.tsx";
 import { Spinner } from "@shared/components/Spinner.tsx";
 import { COLOR } from "@shared/components/tokens.ts";

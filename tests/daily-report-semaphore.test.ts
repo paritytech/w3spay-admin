@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { loadDailyReport, MAX_CONCURRENCY } from "@features/reports/api/report-queries.ts";
+import { loadDailyReport, MAX_CONCURRENCY } from "@features/reports/contracts/report-queries.ts";
 
 // Track how many IPFS fetches the daily-report loader runs at once. The
 // mock is hoisted (via `vi.hoisted` + the hoisted `vi.mock` factory) so a
 // plain static `import` of the module-under-test still observes it.
 const tracker = vi.hoisted(() => ({ active: 0, peak: 0 }));
 
-vi.mock("@features/reports/api/fetch-report.ts", () => ({
+vi.mock("@features/reports/contracts/fetch-report.ts", () => ({
   fetchReportEnvelope: vi.fn(async () => {
     tracker.active += 1;
     tracker.peak = Math.max(tracker.peak, tracker.active);

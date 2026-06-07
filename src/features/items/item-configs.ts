@@ -1,6 +1,6 @@
 import type { ReadyAdminAccount } from "@features/session/account.ts";
-import type { ItemConfigRegistryRecord } from "@features/items/api/item-configs-read.ts";
-import type { ItemConfigWriteActions } from "@features/items/api/item-config-writes.ts";
+import type { ItemConfigRegistryRecord } from "@features/items/contracts/item-configs-read.ts";
+import type { ItemConfigWriteActions } from "@features/items/contracts/item-config-writes.ts";
 import type { PublishedConfigSnapshot } from "./item-config-drafts.ts";
 import type { Item, ItemConfig } from "./items-model.ts";
 import type { MutationError, MutationResult } from "./items-mutations.ts";

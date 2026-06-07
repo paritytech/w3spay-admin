@@ -16,17 +16,17 @@
 import { useEffect } from "react";
 import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 
-import { envConfig } from "@shared/config.ts";
-import { journeyTracker } from "@shared/utils/telemetry.ts";
-import { isDemoMode } from "@shared/demo/demo-mode.ts";
-import { useSession } from "@features/session/api/use-session.ts";
-import { useSessionSync } from "@features/session/api/use-session-sync.ts";
-import { useMerchants } from "@features/merchant/api/use-merchants.ts";
+import { envConfig } from "@shared/config";
+import { journeyTracker } from "@shared/lib/telemetry.ts";
+import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
+import { useSession } from "@features/session/contracts/use-session.ts";
+import { useSessionSync } from "@features/session/contracts/use-session-sync.ts";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
 import { useGateVerdict } from "./guards.tsx";
 import { DemoModeBanner } from "@shared/components/DemoModeBanner.tsx";
 import { FeedbackToast } from "@shared/components/FeedbackToast.tsx";
 import { AFrame, ARail, ATabs } from "@shared/components/primitives.tsx";
-import { DebugPanel } from "@/shared/api/host/debug/index.ts";
+import { DebugPanel } from "@/shared/chain/host/debug/index.ts";
 import { TABS, TAB_DEFAULT_PATH, type TabId } from "./routes.ts";
 
 declare module "@tanstack/react-router" {

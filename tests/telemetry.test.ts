@@ -26,7 +26,7 @@ import {
   recordJourneyAttribute,
   sanitizeExceptionMessage,
   scrubAttributes,
-} from "@shared/telemetry";
+} from "@shared/lib/sentry";
 
 const DSN = "https://abc123def456@o111.ingest.de.sentry.io/222";
 const NO_HINT: EventHint = {};

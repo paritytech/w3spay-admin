@@ -14,7 +14,7 @@ import {
   W3SPAY_ITEM_CONFIG_ENVELOPE_VERSION,
   buildAndEncodeItemConfigEnvelope,
   decodeItemConfigEnvelope,
-} from "@features/items/api/envelope.ts";
+} from "@features/items/contracts/envelope.ts";
 import type { ItemConfig } from "@features/items/items-model.ts";
 
 const config: ItemConfig = {

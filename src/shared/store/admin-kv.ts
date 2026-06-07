@@ -9,7 +9,7 @@
  * fires the store has hydrated, so the cached handle is present.
  */
 
-import { createTerminalStore, type KvStore } from "@shared/utils/host-environment.ts";
+import { createTerminalStore, type KvStore } from "@shared/chain/host-environment.ts";
 
 const KV_PREFIX = "w3spay-admin";
 

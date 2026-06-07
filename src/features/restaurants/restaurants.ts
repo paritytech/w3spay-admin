@@ -20,7 +20,7 @@
  * `Restaurant.id` is admin-side bookkeeping and never crosses the wire.
  */
 
-import type { MerchantProfile } from "@/shared/config-qr";
+import type { MerchantProfile } from "@/shared/lib/config-qr";
 
 /** Stable storage key under the admin app's KV prefix. */
 export const RESTAURANTS_KEY = "restaurants/v1" as const;

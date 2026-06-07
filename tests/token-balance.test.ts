@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { envConfig } from "@shared/config.ts";
-import type { AccountId32Hex } from "@shared/utils/address.ts";
+import { envConfig } from "@shared/config";
+import type { AccountId32Hex } from "@shared/lib/address.ts";
 import {
   fetchTokenBalance,
   formatTokenAmount,
   PeopleChainUnavailableError,
-} from "@features/balances/api/token-balance.ts";
+} from "@features/balances/contracts/token-balance.ts";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 //
@@ -36,11 +36,11 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@shared/api/client.ts", () => ({
+vi.mock("@shared/chain/client.ts", () => ({
   usePeopleClient: () => mocks.ref.current,
 }));
 
-vi.mock("@shared/utils/address.ts", () => ({
+vi.mock("@shared/lib/address.ts", () => ({
   accountId32HexToSs58: mocks.accountId32HexToSs58,
 }));
 

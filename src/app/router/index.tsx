@@ -21,7 +21,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 
-import { queryClient } from "@shared/api/query-client.ts";
+import { queryClient } from "@shared/chain/query-client.ts";
 import { RootLayout } from "./layouts.tsx";
 import { AuthedLayout } from "./guards.tsx";
 import { AdminAccountCard } from "@features/session/pages/AdminAccess.tsx";

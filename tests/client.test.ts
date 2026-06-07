@@ -15,7 +15,7 @@ const getOrCreateClient = vi.fn(() => rawClient);
 const resetClientCache = vi.fn();
 const isInHost = vi.fn<() => boolean>(() => false);
 
-vi.mock("@shared/api/host-connection.ts", () => ({
+vi.mock("@shared/chain/host-connection.ts", () => ({
   isInHost,
   detectHostEnvironment: () => (isInHost() ? "web-iframe" : "standalone"),
   isDevStandalone: () => false,
@@ -41,7 +41,7 @@ vi.mock("@/sdk", async (importOriginal) => {
     }),
   };
 });
-vi.mock("@shared/config.ts", () => ({
+vi.mock("@shared/config", () => ({
   envConfig: {
     contracts: { merchantRegistryAddress: "" },
     host: {
@@ -74,7 +74,7 @@ vi.mock("@shared/config.ts", () => ({
 }));
 
 // Deferred import: the client module must observe the provider/config mocks above.
-const { useMainClient, resetMainClient } = await import("@shared/api/client.ts");
+const { useMainClient, resetMainClient } = await import("@shared/chain/client.ts");
 
 afterEach(() => {
   resetMainClient();

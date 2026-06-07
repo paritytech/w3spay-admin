@@ -15,8 +15,8 @@
 
 import { useEffect, useState } from "react";
 
-import { useMerchants } from "@features/merchant/api/use-merchants.ts";
-import { useMerchantWriteOps } from "@features/merchant/api/use-merchant-write-ops.ts";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
+import { useMerchantWriteOps } from "@features/merchant/contracts/use-merchant-write-ops.ts";
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   formatIsoDateTime,

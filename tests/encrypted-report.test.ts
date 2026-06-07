@@ -25,7 +25,7 @@ import {
   REPORT_KEY_BYTES,
   type EncryptedReportMeta,
 } from "@features/reports/encrypted-report.ts";
-import { createPasswordSeed } from "@shared/utils/t3rminal-config-qr.ts";
+import { createPasswordSeed } from "@shared/lib/t3rminal-config-qr.ts";
 
 // ── Fixtures ────────────────────────────────────────────────────
 

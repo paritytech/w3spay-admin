@@ -23,7 +23,7 @@ import {
   renderUrQr,
 } from "@bcts/multipart-ur";
 
-import { buildT3rminalConfigPayloadV2, encodeT3rminalConfigPayloadV2 } from "@shared/utils/t3rminal-config-qr.ts";
+import { buildT3rminalConfigPayloadV2, encodeT3rminalConfigPayloadV2 } from "@shared/lib/t3rminal-config-qr.ts";
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import type { ItemConfig } from "@features/items/items-model.ts";
 

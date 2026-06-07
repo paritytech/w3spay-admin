@@ -13,16 +13,16 @@
  * tile / per-transaction card structure, just in admin styling.
  */
 
-import { envConfig } from "@shared/config.ts";
-import { useDecryptedReport } from "@features/reports/api/report-queries.ts";
-import { resolveNetwork } from "@shared/api/host";
-import { gatewayUrlForCid } from "@features/items/api/item-config-storage.ts";
+import { envConfig } from "@shared/config";
+import { useDecryptedReport } from "@features/reports/contracts/report-queries.ts";
+import { resolveNetwork } from "@shared/chain/host";
+import { gatewayUrlForCid } from "@features/items/contracts/item-config-storage.ts";
 import { shortAddr } from "@features/merchant/merchant-model.ts";
 import type {
   DailyReport,
   DailyReportTransaction,
 } from "@features/reports/daily-report.ts";
-import type { ReportIndexEntry } from "@features/reports/api/bulletin-index-read.ts";
+import type { ReportIndexEntry } from "@features/reports/contracts/bulletin-index-read.ts";
 import type { T3rminalAssignmentV1 } from "@shared/store/t3rminal-assignments.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import {

@@ -1,15 +1,15 @@
-import type { ProductAccount } from "@/shared/api/host";
+import type { ProductAccount } from "@/shared/chain/host";
 import type { PolkadotSigner } from "polkadot-api";
 
-import { envConfig } from "@shared/config.ts";
+import { envConfig } from "@shared/config";
 import {
   bytesToHex,
   normalizeH160Address,
   publicKeyToSs58,
   type AccountId32Hex,
   type H160Hex,
-} from "@shared/utils/address.ts";
-import type { UseIsAdminResult } from "@features/session/api/is-admin.ts";
+} from "@shared/lib/address.ts";
+import type { UseIsAdminResult } from "@features/session/contracts/is-admin.ts";
 
 export interface AdminGrantIdentity {
   readonly productIdentifier: string;

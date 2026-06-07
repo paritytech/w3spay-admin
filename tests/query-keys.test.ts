@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { addressSetKey, queryKeys, queryRoots } from "@shared/api/keys.ts";
-import type { AccountId32Hex } from "@shared/utils/address.ts";
+import { addressSetKey, queryKeys, queryRoots } from "@shared/chain/keys.ts";
+import type { AccountId32Hex } from "@shared/lib/address.ts";
 
 describe("query keys", () => {
   it("merchant-registry key carries network + address under the invalidation root", () => {

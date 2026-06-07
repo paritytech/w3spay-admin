@@ -20,8 +20,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { blake2b } from "@noble/hashes/blake2.js";
 
-import { publishItemConfig, type PreimageSubmitter } from "@features/items/api/item-config-storage.ts";
-import { calculateBulletinCidObject } from "@features/items/api/cid.ts";
+import { publishItemConfig, type PreimageSubmitter } from "@features/items/contracts/item-config-storage.ts";
+import { calculateBulletinCidObject } from "@features/items/contracts/cid.ts";
 import type { ItemConfig } from "@features/items/items-model.ts";
 
 const CONFIG: ItemConfig = {

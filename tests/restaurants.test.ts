@@ -27,7 +27,7 @@ import {
   type Restaurant,
   type RestaurantForm,
 } from "@features/restaurants/restaurants.ts";
-import type { MerchantProfile } from "@/config-qr";
+import type { MerchantProfile } from "@shared/lib/config-qr";
 
 const FULL_FORM: RestaurantForm = {
   id: "funkhaus",
