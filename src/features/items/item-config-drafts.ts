@@ -139,3 +139,30 @@ export function dirtyConfigIds(
   }
   return out;
 }
+
+/**
+ * Decide which published configs a device should adopt as its local
+ * draft layer. The seed is a *fallback, not a default* (see
+ * `items-mock.ts`): a device that has never persisted a genuine local
+ * edit (`fromSeed`) shows the seed only until the registry resolves, at
+ * which point the published Bulletin configs replace it.
+ *
+ * Returns the config bodies to adopt — in registry-map order, skipping
+ * records whose IPFS body has not resolved yet — or `null` when nothing
+ * should change:
+ *   - `fromSeed` false → the device has genuine local drafts; never
+ *     clobber them with the registry.
+ *   - registry has no usable bodies → keep the seed so first-run UX
+ *     still has a recognisable menu.
+ */
+export function publishedConfigsToAdopt(
+  fromSeed: boolean,
+  snapshots: ReadonlyMap<string, PublishedConfigSnapshot>,
+): ReadonlyArray<ItemConfig> | null {
+  if (!fromSeed) return null;
+  const bodies: ItemConfig[] = [];
+  for (const snap of snapshots.values()) {
+    if (snap.snapshot != null) bodies.push(snap.snapshot);
+  }
+  return bodies.length > 0 ? bodies : null;
+}

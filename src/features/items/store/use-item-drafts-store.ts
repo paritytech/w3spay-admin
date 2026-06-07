@@ -14,6 +14,12 @@
  * (decode or fall back to the seed) + synchronous write-through after
  * each successful mutation. Persist is gated on `hydrated` so an early
  * mutation can't clobber stored drafts with the seed.
+ *
+ * A device with no persisted drafts hydrates to the seed and flags
+ * `fromSeed`; once the published registry resolves, `useItemConfigs`
+ * calls `adoptPublished` to replace that seed with the Bulletin configs
+ * so a second device sees what was published, not the sample menu. The
+ * seed is a fallback, not a default (see `items-mock.ts`).
  */
 
 import { useEffect } from "react";
@@ -24,7 +30,7 @@ import { captureError } from "@/shared/lib/sentry";
 import { cachedAdminKvStore, getAdminKvStore } from "@shared/store/admin-kv.ts";
 import {
   ITEM_CONFIG_DRAFTS_KEY,
-  decodeDraftsOrFallback,
+  decodeDraftsPayload,
   encodeDraftsPayload,
 } from "@features/items/item-config-drafts.ts";
 import { ITEM_CONFIGS_SEED } from "@features/items/items-mock.ts";
@@ -45,9 +51,11 @@ import {
 export interface ItemDraftsState {
   readonly configs: ReadonlyArray<ItemConfig>;
   readonly hydrated: boolean;
+  readonly fromSeed: boolean;
   readonly writeInFlight: boolean;
   readonly lastError: MutationError | null;
   hydrate(): Promise<void>;
+  adoptPublished(configs: ReadonlyArray<ItemConfig>): void;
   resetError(): void;
   createConfig(args: { name: string; id: string }): Promise<MutationResult>;
   duplicateConfig(sourceId: string, args: { name: string; id: string }): Promise<MutationResult>;
@@ -81,7 +89,7 @@ export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
         set({ lastError: result.error });
         return Promise.resolve(result);
       }
-      set({ configs: result.configs });
+      set({ configs: result.configs, fromSeed: false });
       persistDrafts(result.configs, get().hydrated);
       return Promise.resolve(result);
     } finally {
@@ -91,6 +99,7 @@ export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
 
   return {
     configs: ITEM_CONFIGS_SEED,
+    fromSeed: true,
     hydrated: false,
     writeInFlight: false,
     lastError: null,
@@ -106,7 +115,11 @@ export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
         }
         try {
           const raw = await store.getJSON<unknown>(ITEM_CONFIG_DRAFTS_KEY);
-          set({ configs: decodeDraftsOrFallback(raw, ITEM_CONFIGS_SEED) });
+          const decoded = decodeDraftsPayload(raw);
+          // Genuine local drafts win; a null decode keeps the seed
+          // fallback (fromSeed stays true) so the published registry can
+          // replace it once it resolves (see `adoptPublished`).
+          if (decoded !== null) set({ configs: decoded, fromSeed: false });
         } catch (caught) {
           console.warn("[items] draft hydrate failed", caught);
           // Degrades the Items tab to seed-only — the admin's prior
@@ -120,6 +133,15 @@ export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
     },
 
     resetError: () => set({ lastError: null }),
+
+    adoptPublished: (configs) => {
+      // Registry → local-store sync. Only a device with no genuine local
+      // edits (fromSeed) adopts the published configs; the guard also
+      // makes this idempotent against the registry's 60s refetch so it
+      // never clobbers in-progress edits.
+      if (!get().fromSeed) return;
+      set({ configs, fromSeed: false });
+    },
 
     createConfig: (args) => runMutation((current, now) => createConfigFn(current, args, now)),
     duplicateConfig: (sourceId, args) =>

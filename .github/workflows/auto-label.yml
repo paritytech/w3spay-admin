@@ -1,0 +1,49 @@
+name: Auto-label by Repository
+
+on:
+  issues:
+    types: [opened, transferred]
+  pull_request:
+    types: [opened]
+  project_card:
+    types: [created]
+
+jobs:
+  add-repo-label:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    
+    steps:
+      - name: Add repository label to issue
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'w3spay-admin';
+         
+            
+            // Add label to issue
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [label]
+            });
+      
+      - name: Add repository label to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'w3spay-admin';
+            
+            
+            // Add label to PR
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: [label]
+            });

@@ -16,6 +16,7 @@ import {
   dirtyConfigIds,
   encodeDraftsPayload,
   isConfigDirty,
+  publishedConfigsToAdopt,
   type PublishedConfigSnapshot,
 } from "@features/items/item-config-drafts.ts";
 
@@ -126,5 +127,39 @@ describe("dirty diff", () => {
       // cafe has no snapshot → counted as dirty.
     ]);
     expect(dirtyConfigIds([bar, cafe], snapshots)).toEqual(["cafe"]);
+  });
+});
+
+describe("publishedConfigsToAdopt", () => {
+  const cafe: ItemConfig = {
+    id: "cafe",
+    name: "Café",
+    updatedAt: "2026-01-01T00:00:00Z",
+    items: [{ id: "sku-201", name: "Espresso", price: 2.2 }],
+  };
+
+  it("returns null when the device has genuine local drafts", () => {
+    const snapshots = new Map([[bar.id, snapshotOf(bar)]]);
+    expect(publishedConfigsToAdopt(false, snapshots)).toBeNull();
+  });
+
+  it("returns null when the registry is empty (keep the seed)", () => {
+    expect(publishedConfigsToAdopt(true, new Map())).toBeNull();
+  });
+
+  it("returns null when no record has a resolved body yet", () => {
+    const snapshots = new Map<string, PublishedConfigSnapshot>([
+      [bar.id, { ...snapshotOf(bar), snapshot: null }],
+    ]);
+    expect(publishedConfigsToAdopt(true, snapshots)).toBeNull();
+  });
+
+  it("adopts published bodies in registry order, skipping unresolved ones", () => {
+    const snapshots = new Map<string, PublishedConfigSnapshot>([
+      [bar.id, snapshotOf(bar)],
+      ["pending", { ...snapshotOf(cafe), configId: "pending", snapshot: null }],
+      [cafe.id, snapshotOf(cafe, "cid-cafe")],
+    ]);
+    expect(publishedConfigsToAdopt(true, snapshots)).toEqual([bar, cafe]);
   });
 });
