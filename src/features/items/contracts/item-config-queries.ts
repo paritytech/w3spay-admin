@@ -3,13 +3,15 @@
  *
  * Replaces the registry half of the old `useItemConfigs` hook: a chain
  * read (`listItemConfigRecords`) plus one IPFS envelope fetch per CID,
- * folded into `publishedSnapshots`. The 60s `refetchInterval` replaces
- * the former `setInterval` poller; the query cache dedups the fan-out
- * across the Items tab + Configure-T3rminal screen (no provider needed).
+ * folded into `publishedSnapshots`. The 5s `refetchInterval` replaces the
+ * former `setInterval` poller so every admin device picks up another
+ * device's publish quickly; the query cache dedups the fan-out across the
+ * Items tab + Configure-T3rminal screen (no provider needed). Envelope
+ * bodies are cached by CID (content-addressed, hence immutable) to keep
+ * the 5s poll cheap — only new CIDs hit the IPFS gateway.
  *
- * Demo mode synthesizes snapshots from `ITEM_CONFIGS_SEED` inside the
- * `queryFn`, so the dirty diff against local drafts behaves identically
- * to a real chain read.
+ * Demo mode has no chain to read: its registry starts empty and only
+ * holds whatever an in-session demo publish wrote into the query cache.
  */
 
 import { queryOptions, useQuery } from "@tanstack/react-query";
@@ -22,12 +24,19 @@ import { envConfig } from "@shared/config";
 import { fetchItemConfigEnvelope } from "./item-config-storage.ts";
 import { listItemConfigRecords, type ItemConfigRegistryRecord } from "./item-configs-read.ts";
 import type { PublishedConfigSnapshot } from "@features/items/item-config-drafts.ts";
-import { ITEM_CONFIGS_SEED } from "@features/items/items-mock.ts";
+import type { ItemConfig } from "@features/items/items-model.ts";
 import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
 import { queryKeys, queryRoots } from "@shared/chain/keys.ts";
 import { queryClient } from "@shared/chain/query-client.ts";
 
-const ITEM_CONFIG_REGISTRY_POLL_MS = 60_000;
+// Poll the registry every 5s so each admin device converges on configs
+// another device has published.
+const ITEM_CONFIG_REGISTRY_POLL_MS = 5_000;
+
+// Envelope bodies are content-addressed by CID, so a body never changes
+// for a given CID. Cache decoded bodies across polls: the 5s refetch then
+// only fetches genuinely new CIDs from the IPFS gateway.
+const envelopeBodyCache = new Map<string, ItemConfig>();
 
 export interface ItemConfigRegistrySnapshot {
   readonly publishedRegistry: ReadonlyArray<ItemConfigRegistryRecord>;
@@ -35,20 +44,13 @@ export interface ItemConfigRegistrySnapshot {
 }
 
 function demoRegistrySnapshot(): ItemConfigRegistrySnapshot {
-  // Treat the seed as "what the chain believes is published" so the
-  // dirty-diff against drafts works exactly as in real chain mode.
-  const now = new Date().toISOString();
-  const publishedSnapshots = new Map<string, PublishedConfigSnapshot>();
-  for (const config of ITEM_CONFIGS_SEED) {
-    publishedSnapshots.set(config.id, {
-      configId: config.id,
-      cid: `bafydemo${config.id}`,
-      size: 0,
-      updatedAt: now,
-      snapshot: config,
-    });
-  }
-  return { publishedRegistry: [], publishedSnapshots };
+  // No synthetic seed: demo starts with an empty registry and only holds
+  // snapshots an in-session demo publish wrote into the cache, so the
+  // poll doesn't revert them.
+  const prev = queryClient.getQueryData<ItemConfigRegistrySnapshot>(
+    itemConfigRegistryQueryOptions().queryKey,
+  );
+  return prev ?? { publishedRegistry: [], publishedSnapshots: new Map() };
 }
 
 async function fetchRegistrySnapshot(): Promise<ItemConfigRegistrySnapshot> {
@@ -59,15 +61,19 @@ async function fetchRegistrySnapshot(): Promise<ItemConfigRegistrySnapshot> {
   const publishedSnapshots = new Map<string, PublishedConfigSnapshot>();
   await Promise.all(
     records.map(async (record) => {
+      const cachedBody = envelopeBodyCache.get(record.cid);
       publishedSnapshots.set(record.configId, {
         configId: record.configId,
         cid: record.cid,
         size: record.size,
         updatedAt: record.updatedAt,
-        snapshot: null,
+        snapshot: cachedBody ?? null,
       });
+      // Body already decoded for this CID → skip the gateway round-trip.
+      if (cachedBody) return;
       const envelope = await fetchItemConfigEnvelope({ cid: record.cid, gatewayBase: gateway });
       if (envelope) {
+        envelopeBodyCache.set(record.cid, envelope.config);
         publishedSnapshots.set(record.configId, {
           configId: record.configId,
           cid: record.cid,

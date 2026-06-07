@@ -8,7 +8,6 @@
 
 import { describe, expect, it } from "vitest";
 
-import { ITEM_CONFIGS_SEED } from "@features/items/items-mock.ts";
 import type { ItemConfig } from "@features/items/items-model.ts";
 import {
   decodeDraftsOrFallback,
@@ -16,7 +15,8 @@ import {
   dirtyConfigIds,
   encodeDraftsPayload,
   isConfigDirty,
-  publishedConfigsToAdopt,
+  reconcilePublishedConfigs,
+  sameConfigContent,
   type PublishedConfigSnapshot,
 } from "@features/items/item-config-drafts.ts";
 
@@ -41,27 +41,36 @@ function snapshotOf(config: ItemConfig, cid = "cid-bar"): PublishedConfigSnapsho
 }
 
 describe("draft payload codec", () => {
-  it("encodes the version + configs as a stable shape", () => {
-    const payload = encodeDraftsPayload([bar]);
-    expect(payload.version).toBe(1);
+  it("encodes configs + base as a stable v2 shape", () => {
+    const payload = encodeDraftsPayload([bar], [bar]);
+    expect(payload.version).toBe(2);
     expect(payload.configs).toEqual([bar]);
+    expect(payload.base).toEqual([bar]);
   });
 
   it("roundtrips encode → decode", () => {
-    const encoded = encodeDraftsPayload([bar]);
+    const encoded = encodeDraftsPayload([bar], [bar]);
     const decoded = decodeDraftsPayload(encoded);
-    expect(decoded).toEqual([bar]);
+    expect(decoded?.configs).toEqual([bar]);
+    expect(decoded?.base).toEqual([bar]);
   });
 
-  it("returns null on a missing or wrong-version payload", () => {
+  it("returns null on a missing or unknown-version payload", () => {
     expect(decodeDraftsPayload(null)).toBeNull();
     expect(decodeDraftsPayload({ version: 99, configs: [] })).toBeNull();
-    expect(decodeDraftsPayload({ version: 1, configs: "nope" })).toBeNull();
+    expect(decodeDraftsPayload({ version: 2, configs: "nope" })).toBeNull();
   });
 
-  it("falls back to the seed list when decode fails", () => {
-    expect(decodeDraftsOrFallback(null, ITEM_CONFIGS_SEED)).toBe(ITEM_CONFIGS_SEED);
-    expect(decodeDraftsOrFallback({ junk: true }, ITEM_CONFIGS_SEED)).toBe(ITEM_CONFIGS_SEED);
+  it("migrates a v1 payload by treating its drafts as the reconcile base", () => {
+    const decoded = decodeDraftsPayload({ version: 1, configs: [bar] });
+    expect(decoded?.configs).toEqual([bar]);
+    expect(decoded?.base).toEqual([bar]);
+  });
+
+  it("falls back to the supplied list when decode fails", () => {
+    const fallback = [bar];
+    expect(decodeDraftsOrFallback(null, fallback)).toBe(fallback);
+    expect(decodeDraftsOrFallback({ junk: true }, fallback)).toBe(fallback);
   });
 
   it("flattens legacy category-shaped configs into the new flat shape", () => {
@@ -81,7 +90,14 @@ describe("draft payload codec", () => {
     };
     const decoded = decodeDraftsPayload(legacyPayload);
     expect(decoded).not.toBeNull();
-    expect(decoded?.[0]?.items.map((i) => i.id)).toEqual(["sku-1", "sku-2"]);
+    expect(decoded?.configs[0]?.items.map((i) => i.id)).toEqual(["sku-1", "sku-2"]);
+  });
+});
+
+describe("sameConfigContent", () => {
+  it("matches the dirty diff's content equality (updatedAt ignored)", () => {
+    expect(sameConfigContent(bar, { ...bar, updatedAt: "2030-01-01T00:00:00Z" })).toBe(true);
+    expect(sameConfigContent(bar, { ...bar, name: "Bar 2" })).toBe(false);
   });
 });
 
@@ -130,36 +146,73 @@ describe("dirty diff", () => {
   });
 });
 
-describe("publishedConfigsToAdopt", () => {
+describe("reconcilePublishedConfigs", () => {
   const cafe: ItemConfig = {
     id: "cafe",
     name: "Café",
     updatedAt: "2026-01-01T00:00:00Z",
     items: [{ id: "sku-201", name: "Espresso", price: 2.2 }],
   };
+  const barEdited: ItemConfig = { ...bar, name: "Bar 2" };
 
-  it("returns null when the device has genuine local drafts", () => {
-    const snapshots = new Map([[bar.id, snapshotOf(bar)]]);
-    expect(publishedConfigsToAdopt(false, snapshots)).toBeNull();
-  });
+  function published(...configs: ReadonlyArray<ItemConfig>): Map<string, PublishedConfigSnapshot> {
+    const map = new Map<string, PublishedConfigSnapshot>();
+    for (const config of configs) map.set(config.id, snapshotOf(config, `cid-${config.id}`));
+    return map;
+  }
+  function baseOf(...configs: ReadonlyArray<ItemConfig>): ReadonlyMap<string, ItemConfig> {
+    return new Map(configs.map((config) => [config.id, config]));
+  }
+  const noBase: ReadonlyMap<string, ItemConfig> = new Map();
 
-  it("returns null when the registry is empty (keep the seed)", () => {
-    expect(publishedConfigsToAdopt(true, new Map())).toBeNull();
-  });
-
-  it("returns null when no record has a resolved body yet", () => {
-    const snapshots = new Map<string, PublishedConfigSnapshot>([
+  it("returns null when the registry has no resolved bodies", () => {
+    expect(reconcilePublishedConfigs([], noBase, new Map())).toBeNull();
+    const unresolved = new Map<string, PublishedConfigSnapshot>([
       [bar.id, { ...snapshotOf(bar), snapshot: null }],
     ]);
-    expect(publishedConfigsToAdopt(true, snapshots)).toBeNull();
+    expect(reconcilePublishedConfigs([], noBase, unresolved)).toBeNull();
   });
 
-  it("adopts published bodies in registry order, skipping unresolved ones", () => {
-    const snapshots = new Map<string, PublishedConfigSnapshot>([
-      [bar.id, snapshotOf(bar)],
-      ["pending", { ...snapshotOf(cafe), configId: "pending", snapshot: null }],
-      [cafe.id, snapshotOf(cafe, "cid-cafe")],
-    ]);
-    expect(publishedConfigsToAdopt(true, snapshots)).toEqual([bar, cafe]);
+  it("adopts every published config on a fresh (empty) device", () => {
+    const result = reconcilePublishedConfigs([], noBase, published(bar, cafe));
+    expect(result?.configs).toEqual([bar, cafe]);
+    expect([...(result?.base.keys() ?? [])]).toEqual(["bar", "cafe"]);
+  });
+
+  it("adopts a peer's change when the draft has no edits since its base", () => {
+    // Mirrors a v1-migrated or previously-synced device: base === draft.
+    const result = reconcilePublishedConfigs([bar], baseOf(bar), published(barEdited));
+    expect(result?.configs).toEqual([barEdited]);
+    expect(result?.base.get("bar")).toEqual(barEdited);
+  });
+
+  it("adopts a brand-new peer config without touching untouched locals", () => {
+    const result = reconcilePublishedConfigs([bar], baseOf(bar), published(bar, cafe));
+    expect(result?.configs).toEqual([bar, cafe]);
+  });
+
+  it("keeps an in-progress local edit (no-op) instead of clobbering it", () => {
+    // Local edited bar→barEdited; chain still has the original bar.
+    expect(reconcilePublishedConfigs([barEdited], baseOf(bar), published(bar))).toBeNull();
+  });
+
+  it("keeps the local edit on a true conflict (both sides changed)", () => {
+    const barOther: ItemConfig = { ...bar, name: "Bar 3" };
+    expect(reconcilePublishedConfigs([barEdited], baseOf(bar), published(barOther))).toBeNull();
+  });
+
+  it("pins the base to the chain after the device publishes its edit", () => {
+    const result = reconcilePublishedConfigs([barEdited], baseOf(bar), published(barEdited));
+    expect(result?.configs).toEqual([barEdited]);
+    expect(result?.base.get("bar")).toEqual(barEdited);
+  });
+
+  it("is a no-op once the device is fully in sync", () => {
+    expect(reconcilePublishedConfigs([bar], baseOf(bar), published(bar))).toBeNull();
+  });
+
+  it("does not resurrect a config deleted locally after a prior sync", () => {
+    // `bar` was synced (tombstone in base), then deleted from drafts.
+    expect(reconcilePublishedConfigs([], baseOf(bar), published(bar))).toBeNull();
   });
 });

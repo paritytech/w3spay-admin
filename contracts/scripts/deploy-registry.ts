@@ -21,7 +21,7 @@ import { sr25519CreateDerive } from "@polkadot-labs/hdkd";
 import { entropyToMiniSecret, mnemonicToEntropy } from "@polkadot-labs/hdkd-helpers";
 import { encodeAbiParameters, keccak256, type Abi, type AbiParameter } from "viem";
 
-import { resolveNetwork } from "../../src/sdk/host/index.ts";
+import { resolveNetwork } from "../../src/shared/chain/host/networks.ts";
 
 const CONTRACTS_ROOT = resolve(__dirname, "..");
 const APP_ROOT = resolve(CONTRACTS_ROOT, "..");

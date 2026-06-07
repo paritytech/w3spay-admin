@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo } from "react";
 
-import { dirtyConfigIds, publishedConfigsToAdopt } from "@features/items/item-config-drafts.ts";
+import { dirtyConfigIds } from "@features/items/item-config-drafts.ts";
 import type { UseItemConfigsResult } from "@features/items/item-configs.ts";
 import { useItemConfigPublish } from "./item-config-mutations.ts";
 import { useItemConfigRegistry } from "./item-config-queries.ts";
@@ -32,22 +32,20 @@ export function useItemConfigs(): UseItemConfigsResult {
   const upsertItem = useItemDraftsStore((s) => s.upsertItem);
   const deleteItem = useItemDraftsStore((s) => s.deleteItem);
   const resetError = useItemDraftsStore((s) => s.resetError);
-  const fromSeed = useItemDraftsStore((s) => s.fromSeed);
   const hydrated = useItemDraftsStore((s) => s.hydrated);
-  const adoptPublished = useItemDraftsStore((s) => s.adoptPublished);
+  const reconcilePublished = useItemDraftsStore((s) => s.reconcilePublished);
 
   const { publishedRegistry, publishedSnapshots, registryLoaded, refreshPublishedRegistry } =
     useItemConfigRegistry();
 
-  // Registry → drafts sync: on a device with no genuine local edits the
-  // seed is a fallback, not a default (see items-mock.ts), so published
-  // Bulletin configs replace it once the registry resolves. No-op once
-  // the device has local drafts; idempotent against the 60s refetch.
+  // Registry → drafts sync. The store's three-way merge converges this
+  // device on configs other devices have published while preserving any
+  // in-progress local edits (see `reconcilePublishedConfigs`). Runs on
+  // every registry poll; a no-op when nothing changed.
   useEffect(() => {
     if (!hydrated) return;
-    const adopt = publishedConfigsToAdopt(fromSeed, publishedSnapshots);
-    if (adopt) adoptPublished(adopt);
-  }, [hydrated, fromSeed, publishedSnapshots, adoptPublished]);
+    reconcilePublished(publishedSnapshots);
+  }, [hydrated, publishedSnapshots, reconcilePublished]);
 
   const account = useSessionStore((s) => s.readyAccount);
   const { saveAllChanged, saveConfig, publishInFlight, publishProgress } =

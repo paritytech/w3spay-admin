@@ -278,6 +278,63 @@ export function isHostConnected(): boolean {
   return connected;
 }
 
+// ── Host modal serialization ──────────────────────────────────────
+
+/**
+ * Wall-clock ceiling a single host modal may hold the serialization
+ * lock. The host shows one modal at a time and silently drops any
+ * request that arrives while another is open; this ceiling guarantees a
+ * never-answered modal (user backgrounds the app, host wedges) eventually
+ * releases the lock so the modals queued behind it still run.
+ */
+export const HOST_MODAL_MAX_LOCK_MS = 120_000;
+
+/**
+ * FIFO tail of the host-modal queue. Always the settled state of the
+ * last-enqueued task (or its ceiling, whichever comes first). A new task
+ * chains off this tail, so it only opens its modal after the previous one
+ * has closed.
+ */
+let hostModalQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Serialize a host-modal request behind every prior one.
+ *
+ * The host renders modals one at a time and **silently drops** a request
+ * that arrives while another modal is open — so two permission prompts
+ * fired during boot (Sentry remote-origins + `ChainSubmit`) race, and the
+ * loser never appears, leaving the gate stuck on a grant the user was
+ * never asked for. This makes the "one at a time" invariant explicit: the
+ * `task` only runs once the previously-enqueued modal settles.
+ *
+ * Both settle paths advance the chain (`then(task, task)`), so a denied or
+ * failed modal does not wedge everything queued behind it. The returned
+ * promise is the task's own result (not the lock), so callers observe the
+ * real grant/deny outcome and errors propagate normally.
+ */
+export function runExclusiveHostModal<T>(task: () => PromiseLike<T>): Promise<T> {
+  const run = Promise.resolve(hostModalQueue).then(task, task);
+  const { promise: ceiling, resolve: openCeiling } = Promise.withResolvers<void>();
+  const timer = setTimeout(openCeiling, HOST_MODAL_MAX_LOCK_MS);
+  hostModalQueue = Promise.race([
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+    ceiling,
+  ]).finally(() => clearTimeout(timer));
+  return run;
+}
+
+/**
+ * Test-only reset of the host-modal FIFO tail. Production code MUST NOT
+ * call this — the queue's continuity across a session is what keeps the
+ * one-modal-at-a-time invariant intact.
+ */
+export function __resetHostModalQueueForTests(): void {
+  hostModalQueue = Promise.resolve();
+}
+
 /**
  * Ask the host to grant the camera permission, returning the user's
  * grant/deny decision.
@@ -305,7 +362,7 @@ export function isHostConnected(): boolean {
  */
 export async function requestCameraPermission(): Promise<boolean> {
   if (!isInHost()) return true;
-  const result = await requestDevicePermission("Camera");
+  const result = await runExclusiveHostModal(() => requestDevicePermission("Camera"));
   return result.match(
     (granted) => granted,
     (err) => {
@@ -385,9 +442,11 @@ async function doRequestRemoteOrigins(
   try {
     const ready = await connectToHost();
     if (!ready) return { granted: false, error: "host transport not ready" };
-    return await requestPermission({ tag: "Remote", value: origins }).match<RemoteOriginPermissionOutcome>(
-      (granted) => ({ granted }),
-      (err) => ({ granted: false, error: err.payload?.reason ?? err.message }),
+    return await runExclusiveHostModal(() =>
+      requestPermission({ tag: "Remote", value: origins }).match<RemoteOriginPermissionOutcome>(
+        (granted) => ({ granted }),
+        (err) => ({ granted: false, error: err.payload?.reason ?? err.message }),
+      ),
     );
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : String(caught);
@@ -576,11 +635,13 @@ function claimOneAllowance(
     });
     const call = (async () => {
       try {
-        const result = await Promise.resolve(
-          hostApi.requestResourceAllocation(
-            enumValue("v1", [buildAllocationRequest(kind)]) as unknown as Parameters<
-              typeof hostApi.requestResourceAllocation
-            >[0],
+        const result = await runExclusiveHostModal(() =>
+          Promise.resolve(
+            hostApi.requestResourceAllocation(
+              enumValue("v1", [buildAllocationRequest(kind)]) as unknown as Parameters<
+                typeof hostApi.requestResourceAllocation
+              >[0],
+            ),
           ),
         );
         return await new Promise<ResourceAllowanceOutcome>((resolve) => {

@@ -31,6 +31,7 @@ import {
   detectHostEnvironment,
   getAccountsProvider,
   isInHost,
+  runExclusiveHostModal,
   type HostEnvironment,
 } from "./connection.ts";
 import { recordBootEvent } from "./debug/debug-store.ts";
@@ -315,16 +316,22 @@ export async function requestAccessHostWallet(
 
   let decision: "granted" | "rejected" | "error";
   try {
-    const result = await Promise.resolve(getAccountsProvider().requestLogin(prompt));
-    decision = await new Promise<"granted" | "rejected" | "error">((resolve) => {
-      result.match(
-        (value) => resolve((value as unknown) === "rejected" ? "rejected" : "granted"),
-        (err) => {
-          console.warn("[host-wallet] requestLogin error:", err);
-          resolve("error");
-        },
-      );
-    });
+    // Serialized behind any open host modal: requestLogin is itself a host
+    // modal, and the host drops a prompt that arrives while another is up.
+    decision = await runExclusiveHostModal(() =>
+      Promise.resolve(getAccountsProvider().requestLogin(prompt)).then(
+        (result) =>
+          new Promise<"granted" | "rejected" | "error">((resolve) => {
+            result.match(
+              (value) => resolve((value as unknown) === "rejected" ? "rejected" : "granted"),
+              (err) => {
+                console.warn("[host-wallet] requestLogin error:", err);
+                resolve("error");
+              },
+            );
+          }),
+      ),
+    );
   } catch (caught) {
     const reason = caught instanceof Error ? caught.message : String(caught);
     console.warn(`[host-wallet] requestAccess threw: ${reason}`);

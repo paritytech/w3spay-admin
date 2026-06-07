@@ -102,7 +102,7 @@ function readEnv(): EnvConfig {
       // — a session-startup log is the only signal we have when the
       // host wedges, and the panel is the cheapest place to see it.
       // Set `VITE_W3SPAY_ADMIN_DEBUG_PANEL_OPEN=false` to revert.
-      openByDefault: envFlag("VITE_W3SPAY_ADMIN_DEBUG_PANEL_OPEN", true),
+      openByDefault: envFlag("VITE_W3SPAY_ADMIN_DEBUG_PANEL_OPEN", false),
       // Admin defaults to the timeline tab — a host-regression
       // question is "did the auth flow's phase transitions
       // complete?", and the timeline is the most direct view of

@@ -5,6 +5,7 @@ skills-lock.json
 # build output
 dist/
 build/
+screenshots
 
 # vite caches
 .vite/
@@ -17,7 +18,7 @@ build/
 .idea/
 .vscode/*
 !.vscode/extensions.json
-
+screenshots
 # logs
 npm-debug.log*
 yarn-debug.log*
@@ -43,3 +44,7 @@ out.bulletin.car
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Screenshot handoff — generated artifacts, regenerate with node screenshots/capture.js
+screenshots/handoff/
+screenshots/node_modules/

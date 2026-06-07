@@ -15,7 +15,7 @@ import {
   type Abi,
 } from "viem";
 
-import { resolveNetwork, type NetworkConfig } from "../../../src/sdk/host/index.ts";
+import { resolveNetwork, type NetworkConfig } from "../../../src/shared/chain/host/networks";
 
 export const CONTRACTS_ROOT = resolve(__dirname, "..", "..");
 export const APP_ROOT = resolve(CONTRACTS_ROOT, "..");

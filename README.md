@@ -185,3 +185,22 @@ The admin app probes the host once at login (`src/host/permissions.ts`):
 Defense-in-depth: `useMerchantRegistry` throws `ChainSubmitDeniedError` if
 a write is invoked while the cached grant is `false`. The gate should
 normally prevent this, but the throw guards against bypasses.
+
+### Modal serialization
+
+The host renders **one modal at a time** and silently drops any permission
+request that arrives while another modal is open. Two prompts therefore
+collide at boot — the Sentry remote-origins grant (fired pre-React from
+`src/instrument.ts`) and `ChainSubmit` (fired once the product account
+resolves) — and the loser never appears, stranding the gate on a grant the
+user was never shown.
+
+Every call that pops a host modal is funnelled through a single module-level
+FIFO queue, `runExclusiveHostModal` (`src/shared/chain/host/connection.ts`),
+so each prompt only opens after the previous one closes. In enqueue order at
+boot: Sentry remote-origins → `ChainSubmit`. The admin login (`requestLogin`,
+via the AdminAccess "Request access" / "Re-request permission" affordances)
+and the shared-but-unused camera / resource-allowance helpers route through
+the same queue. A denied or failed prompt advances the chain rather than
+wedging it, and a `HOST_MODAL_MAX_LOCK_MS` (120s) ceiling releases the lock
+if a modal is never answered (app backgrounded, host wedged).

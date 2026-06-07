@@ -18,7 +18,7 @@
  * RemotePermission enum surface; there is no `ChainRead` variant.
  */
 
-import { enumValue, hostApi, requestPermission } from "@/shared/chain/host";
+import { enumValue, hostApi, requestPermission, runExclusiveHostModal } from "@/shared/chain/host";
 
 /**
  * Outcome of `host_feature_supported(Chain, genesisHash)`.
@@ -97,8 +97,13 @@ export async function requestRemotePermission(
 ): Promise<RemotePermissionOutcome> {
   // `requestPermission` wraps the call in `enumValue("v1", ...)` itself
   // in the low-level SDK; we only have to pass the inner enum variant.
-  return requestPermission({ tag: kind, value: undefined }).match<RemotePermissionOutcome>(
-    (granted) => ({ granted }),
-    (err) => ({ granted: false, error: err.payload.reason }),
+  // Serialized: the host shows one modal at a time, so this prompt must
+  // wait for any boot modal (e.g. the Sentry remote-origins grant fired
+  // pre-React) to close — otherwise the host drops it and the gate stalls.
+  return runExclusiveHostModal(() =>
+    requestPermission({ tag: kind, value: undefined }).match<RemotePermissionOutcome>(
+      (granted) => ({ granted }),
+      (err) => ({ granted: false, error: err.payload.reason }),
+    ),
   );
 }

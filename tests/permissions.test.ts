@@ -25,7 +25,7 @@ const featureSupported = vi.fn();
 const requestPermission = vi.fn();
 const enumValue = vi.fn((tag: string, value: unknown) => ({ tag, value }));
 
-vi.mock("@/sdk/host", () => ({
+vi.mock("@/shared/chain/host", () => ({
   hostApi: {
     get featureSupported() {
       return featureSupported;
@@ -33,6 +33,9 @@ vi.mock("@/sdk/host", () => ({
   },
   requestPermission,
   enumValue,
+  // permissions.ts serializes the prompt through the host-modal queue;
+  // run the task inline so the existing call/grant assertions still hold.
+  runExclusiveHostModal: <T,>(task: () => PromiseLike<T>) => Promise.resolve(task()),
 }));
 
 const { checkHostChainSupport, requestRemotePermission } = await import(

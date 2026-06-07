@@ -11,15 +11,16 @@
  * store.
  *
  * Same persistence model as the other KV stores: async `hydrate()` once
- * (decode or fall back to the seed) + synchronous write-through after
- * each successful mutation. Persist is gated on `hydrated` so an early
- * mutation can't clobber stored drafts with the seed.
+ * (decode or stay empty) + synchronous write-through after each
+ * successful mutation. Persist is gated on `hydrated` so an early
+ * mutation can't clobber stored drafts with the empty initial state.
  *
- * A device with no persisted drafts hydrates to the seed and flags
- * `fromSeed`; once the published registry resolves, `useItemConfigs`
- * calls `adoptPublished` to replace that seed with the Bulletin configs
- * so a second device sees what was published, not the sample menu. The
- * seed is a fallback, not a default (see `items-mock.ts`).
+ * A device with no persisted drafts starts empty; once the published
+ * registry resolves, `useItemConfigs` calls `reconcilePublished`, which
+ * adopts the Bulletin configs so the Items tab shows what was published.
+ * Every registry poll re-runs a three-way merge
+ * (`reconcilePublishedConfigs`) so devices converge on published changes
+ * while in-progress local edits are preserved.
  */
 
 import { useEffect } from "react";
@@ -32,8 +33,9 @@ import {
   ITEM_CONFIG_DRAFTS_KEY,
   decodeDraftsPayload,
   encodeDraftsPayload,
+  reconcilePublishedConfigs,
+  type PublishedConfigSnapshot,
 } from "@features/items/item-config-drafts.ts";
-import { ITEM_CONFIGS_SEED } from "@features/items/items-mock.ts";
 import type { Item, ItemConfig } from "@features/items/items-model.ts";
 import {
   createConfig as createConfigFn,
@@ -50,12 +52,14 @@ import {
 
 export interface ItemDraftsState {
   readonly configs: ReadonlyArray<ItemConfig>;
+  /** Reconcile baseline — the published body each draft was last synced
+   *  against. Persisted with the drafts; never bumped by local edits. */
+  readonly base: ReadonlyMap<string, ItemConfig>;
   readonly hydrated: boolean;
-  readonly fromSeed: boolean;
   readonly writeInFlight: boolean;
   readonly lastError: MutationError | null;
   hydrate(): Promise<void>;
-  adoptPublished(configs: ReadonlyArray<ItemConfig>): void;
+  reconcilePublished(snapshots: ReadonlyMap<string, PublishedConfigSnapshot>): void;
   resetError(): void;
   createConfig(args: { name: string; id: string }): Promise<MutationResult>;
   duplicateConfig(sourceId: string, args: { name: string; id: string }): Promise<MutationResult>;
@@ -66,13 +70,17 @@ export interface ItemDraftsState {
 
 let hydrating: Promise<void> | null = null;
 
-function persistDrafts(configs: ReadonlyArray<ItemConfig>, hydrated: boolean): void {
+function persistDrafts(
+  configs: ReadonlyArray<ItemConfig>,
+  base: ReadonlyMap<string, ItemConfig>,
+  hydrated: boolean,
+): void {
   // Don't persist before hydration — would clobber stored drafts with
-  // the seed if a mutation lands in the hydrate window.
+  // the empty initial state if a mutation lands in the hydrate window.
   if (!hydrated) return;
   const store = cachedAdminKvStore();
   if (store == null) return;
-  void store.setJSON(ITEM_CONFIG_DRAFTS_KEY, encodeDraftsPayload(configs));
+  void store.setJSON(ITEM_CONFIG_DRAFTS_KEY, encodeDraftsPayload(configs, [...base.values()]));
 }
 
 export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
@@ -89,8 +97,8 @@ export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
         set({ lastError: result.error });
         return Promise.resolve(result);
       }
-      set({ configs: result.configs, fromSeed: false });
-      persistDrafts(result.configs, get().hydrated);
+      set({ configs: result.configs });
+      persistDrafts(result.configs, get().base, get().hydrated);
       return Promise.resolve(result);
     } finally {
       set({ writeInFlight: false });
@@ -98,8 +106,8 @@ export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
   };
 
   return {
-    configs: ITEM_CONFIGS_SEED,
-    fromSeed: true,
+    configs: [],
+    base: new Map<string, ItemConfig>(),
     hydrated: false,
     writeInFlight: false,
     lastError: null,
@@ -116,14 +124,19 @@ export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
         try {
           const raw = await store.getJSON<unknown>(ITEM_CONFIG_DRAFTS_KEY);
           const decoded = decodeDraftsPayload(raw);
-          // Genuine local drafts win; a null decode keeps the seed
-          // fallback (fromSeed stays true) so the published registry can
-          // replace it once it resolves (see `adoptPublished`).
-          if (decoded !== null) set({ configs: decoded, fromSeed: false });
+          // A null decode means no persisted drafts → stay empty until
+          // `reconcilePublished` adopts the registry. v1 payloads decode
+          // with `base = configs` (see `decodeDraftsPayload`).
+          if (decoded !== null) {
+            set({
+              configs: decoded.configs,
+              base: new Map(decoded.base.map((config) => [config.id, config])),
+            });
+          }
         } catch (caught) {
           console.warn("[items] draft hydrate failed", caught);
-          // Degrades the Items tab to seed-only — the admin's prior
-          // edits vanish, so this is a real bug worth capturing.
+          // Degrades the Items tab to empty — the admin's prior edits
+          // vanish, so this is a real bug worth capturing.
           captureError(caught, { subsystem: "item-configs", op: "hydrate" });
         } finally {
           set({ hydrated: true });
@@ -134,13 +147,17 @@ export const useItemDraftsStore = create<ItemDraftsState>((set, get) => {
 
     resetError: () => set({ lastError: null }),
 
-    adoptPublished: (configs) => {
-      // Registry → local-store sync. Only a device with no genuine local
-      // edits (fromSeed) adopts the published configs; the guard also
-      // makes this idempotent against the registry's 60s refetch so it
-      // never clobbers in-progress edits.
-      if (!get().fromSeed) return;
-      set({ configs, fromSeed: false });
+    reconcilePublished: (snapshots) => {
+      // Registry → drafts sync. Runs on every poll: a fresh device adopts
+      // the published menu; afterwards a three-way merge converges on
+      // published changes from other devices while keeping in-progress
+      // local edits (see `reconcilePublishedConfigs`).
+      const { hydrated, configs, base } = get();
+      if (!hydrated) return;
+      const result = reconcilePublishedConfigs(configs, base, snapshots);
+      if (result === null) return;
+      set({ configs: result.configs, base: result.base });
+      persistDrafts(result.configs, result.base, true);
     },
 
     createConfig: (args) => runMutation((current, now) => createConfigFn(current, args, now)),
