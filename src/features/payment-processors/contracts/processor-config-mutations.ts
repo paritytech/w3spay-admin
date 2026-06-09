@@ -97,14 +97,14 @@ export function useProcessorConfigPublish(
       }
 
       setPublishInFlight(true);
-      journeyTracker.start("publish-processor-config", { "publish.terminals": form.terminals.length });
+      journeyTracker.start("w3spay-admin:publish-processor-config", { "publish.terminals": form.terminals.length });
       try {
         const result = await withSpan(
-          "bulletin.publish.processor-config",
+          "w3spay-admin:bulletin.publish.processor-config",
           "bulletin.publish",
           () => publishProcessorConfig({ bundle: buildProcessorBundle(form), passkey: form.passkey }),
         );
-        journeyTracker.milestone("publish-processor-config", "bulletin-uploaded", {
+        journeyTracker.milestone("w3spay-admin:publish-processor-config", "bulletin-uploaded", {
           "publish.size_bytes": result.size,
         });
         await upsertProcessorConfig({
@@ -112,12 +112,12 @@ export function useProcessorConfigPublish(
           payload: { groupId, cid: result.cid, size: result.size },
           onStatus: setTxStatus,
         });
-        journeyTracker.complete("publish-processor-config", { "publish.size_bytes": result.size });
+        journeyTracker.complete("w3spay-admin:publish-processor-config", { "publish.size_bytes": result.size });
         await invalidateRegistry();
         showToast(`Published config for ${groupId}.`, "ok");
         return { ok: true, groupId, cid: result.cid, size: result.size };
       } catch (caught) {
-        journeyTracker.fail("publish-processor-config", categorizePublishError(caught), caught);
+        journeyTracker.fail("w3spay-admin:publish-processor-config", categorizePublishError(caught), caught);
         const reason = caught instanceof Error ? caught.message : String(caught);
         showToast(reason, "err");
         return { ok: false, reason };

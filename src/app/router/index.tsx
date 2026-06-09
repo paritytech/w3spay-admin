@@ -29,6 +29,7 @@ import { MerchantNewPicker } from "@features/merchant/pages/MerchantNewPicker.ts
 import { MerchantsList } from "@features/merchant/pages/MerchantsList.tsx";
 import { Reports } from "@features/reports/pages/Reports.tsx";
 import { ReportsTerminal } from "@features/reports/pages/ReportsTerminal.tsx";
+import { ReportsProcessorGroup } from "@features/reports/pages/ReportsProcessorGroup.tsx";
 import { Restaurants } from "@features/restaurants/pages/Restaurants.tsx";
 import { PaymentProcessors } from "@features/payment-processors/pages/PaymentProcessors.tsx";
 import { useSessionStore } from "@features/session/store/use-session-store.ts";
@@ -236,6 +237,17 @@ const reportsTerminalRoute = createRoute({
   },
 });
 
+// Static `processors` segment — outranks the `$merchantKey` param above.
+const reportsProcessorGroupRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/reports/processors/$groupId",
+  staticData: { tab: "reports", showTabs: false },
+  component: function ReportsProcessorGroupRoute() {
+    const { groupId } = reportsProcessorGroupRoute.useParams();
+    return <ReportsProcessorGroup groupId={groupId} />;
+  },
+});
+
 const accountRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/account",
@@ -276,6 +288,7 @@ const routeTree = rootRoute.addChildren([
     balancesRoute,
     reportsRoute,
     reportsTerminalRoute,
+    reportsProcessorGroupRoute,
     accountRoute,
   ]),
 ]);

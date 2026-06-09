@@ -17,7 +17,7 @@ if (!telemetryTest) {
   // Open the app-boot journey before the first paint. Idempotent inside
   // `journeyTracker.start`, so a StrictMode double-mount won't leak a span.
   // The root layout's `Shell` completes it once the gate + registry settle.
-  journeyTracker.start("app-boot");
+  journeyTracker.start("w3spay-admin:app-boot");
 }
 
 export function App() {

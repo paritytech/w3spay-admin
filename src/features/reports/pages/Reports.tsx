@@ -15,9 +15,18 @@ import { useT3rminalAssignments } from "@shared/store/use-assignments-store.ts";
 import type { TransactionsStreamTerminal } from "@features/reports/transaction-stream.ts";
 import { ACard, AHead } from "@shared/components/primitives.tsx";
 import { COLOR } from "@shared/components/tokens.ts";
-import { ReportsViewToggle, type ReportsViewId } from "@features/reports/components/ReportsViewToggle.tsx";
+import { SegmentedChips } from "@features/reports/components/SegmentedChips.tsx";
 import { TerminalsList } from "@features/reports/components/TerminalsList.tsx";
 import { TransactionsView } from "@features/reports/components/TransactionsView.tsx";
+import { ProcessorGroupsList } from "@features/reports/components/ProcessorGroupsList.tsx";
+
+type TopViewId = "transactions" | "days" | "processors";
+
+const TOP_VIEWS = [
+  { id: "transactions" as const, label: "Transactions" },
+  { id: "days" as const, label: "Daily reports" },
+  { id: "processors" as const, label: "Processors" },
+];
 
 export function Reports() {
   const { merchants } = useMerchants();
@@ -34,7 +43,7 @@ export function Reports() {
 
   const aggregate = useAllTerminalReportIndices(shopKeys);
 
-  const [view, setView] = useState<ReportsViewId>("transactions");
+  const [view, setView] = useState<TopViewId>("transactions");
 
   const gatewayBase = resolveNetwork(envConfig.chain.network).ipfsGateway;
 
@@ -47,7 +56,15 @@ export function Reports() {
     <>
       <AHead eyebrow="Reports" title="Reports" size={32} />
 
-      {aggregate.state === "config-error" ? (
+      <div style={{ marginBottom: 14 }}>
+        <SegmentedChips value={view} items={TOP_VIEWS} onChange={setView} />
+      </div>
+
+      {view === "processors" ? (
+        // Processor reports come from the registry contract, not the t3rminal
+        // bulletin index — a t3rminal-index misconfig must not hide them.
+        <ProcessorGroupsList />
+      ) : aggregate.state === "config-error" ? (
         <div style={{ marginBottom: 12 }}>
           <ACard padding={14}>
             <div style={{ fontSize: 12, color: COLOR.redSoft, lineHeight: 1.55 }}>
@@ -59,13 +76,7 @@ export function Reports() {
             </div>
           </ACard>
         </div>
-      ) : (
-        <div style={{ marginBottom: 14 }}>
-          <ReportsViewToggle value={view} onChange={setView} />
-        </div>
-      )}
-
-      {aggregate.state === "config-error" ? null : view === "transactions" ? (
+      ) : view === "transactions" ? (
         <TransactionsView
           terminals={streamTerminals}
           hideTerminalColumn={false}

@@ -4,9 +4,7 @@
 import { envConfig } from "@/config.ts";
 import { resolveNetwork } from "@shared/chain/host";
 import {
-  claimResourceAllowances,
   isInHost,
-  type ResourceAllowanceKind,
 } from "@shared/chain/host-connection.ts";
 import {
   checkHostChainSupport,
@@ -22,10 +20,6 @@ export interface HostPermissionsSnapshot {
 }
 
 
-const BOOT_RESOURCE_ALLOWANCES: readonly ResourceAllowanceKind[] = [
-  "BulletInAllowance",
-  "SmartContractAllowance:0",
-];
 
 
 export async function resolveHostPermissions(
@@ -52,7 +46,6 @@ export async function resolveHostPermissions(
   //     prompt for the IPFS gateway origin (Items envelopes, reports).
   // Both are fire-and-forget — the admin gate keys off `chainSubmitGrant`
   // alone and shouldn't wait on them.
-  void claimResourceAllowances(BOOT_RESOURCE_ALLOWANCES);
   void probeIpfsGateway(resolveNetwork(envConfig.chain.network).ipfsGateway);
   return { hostChainSupport, chainSubmitGrant };
 }

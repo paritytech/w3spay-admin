@@ -52,9 +52,9 @@ function Shell() {
   // Fires once when the registry leaves `loading`; Shell mounts once at the
   // root, so this fires exactly once.
   useEffect(() => {
-    if (!journeyTracker.isActive("app-boot")) return;
+    if (!journeyTracker.isActive("w3spay-admin:app-boot")) return;
     if (registry.kind === "loading") return;
-    journeyTracker.milestone("app-boot", "registry-loaded", {
+    journeyTracker.milestone("w3spay-admin:app-boot", "registry-loaded", {
       "boot.registry_kind": registry.kind,
     });
   }, [registry.kind]);
@@ -62,7 +62,7 @@ function Shell() {
   // Telemetry: close the app-boot journey once account + admin-check +
   // registry have all settled (started in `App`). Idempotent.
   useEffect(() => {
-    if (!journeyTracker.isActive("app-boot")) return;
+    if (!journeyTracker.isActive("w3spay-admin:app-boot")) return;
     const accountResolving =
       adminAccount.state.kind === "pending" ||
       adminAccount.state.kind === "resolving" ||
@@ -70,7 +70,7 @@ function Shell() {
     if (accountResolving) return;
     if (adminAccount.isAdmin.inFlight) return;
     if (registry.kind === "loading") return;
-    journeyTracker.complete("app-boot", {
+    journeyTracker.complete("w3spay-admin:app-boot", {
       "boot.is_admin": isAdmin,
       "boot.registry_kind": registry.kind,
     });

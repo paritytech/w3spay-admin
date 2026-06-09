@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { generateKeyPairSync } from "node:crypto";
 import { hexToBytes } from "@noble/hashes/utils.js";
 
-import { generateTerminalSecret, generateTopicId } from "@features/payment-processors/secret-generation.ts";
+import {
+  generateP256PrivateKeyPem,
+  generateTerminalSecret,
+  generateTopicId,
+} from "@features/payment-processors/secret-generation.ts";
 import { buildRemoteConfigExport } from "@features/payment-processors/remote-config-export.ts";
 import {
   loadPublishedProcessorConfig,
@@ -101,6 +105,27 @@ describe("extractP256CompressedPublicKey", () => {
     const compressed = extractP256CompressedPublicKey(secret.pemFile);
     expect(compressed.length).toBe(33);
     expect([0x02, 0x03]).toContain(compressed[0]);
+  });
+});
+
+describe("key rotation (regenerate PEM)", () => {
+  it("a regenerated PEM changes the exported public key but keeps the topic identity", async () => {
+    const form = await formWithGeneratedSecret();
+    const before = buildRemoteConfigExport(form)["1342061307"]!;
+
+    const rotatedPem = await generateP256PrivateKeyPem();
+    expect(rotatedPem).not.toBe(form.terminals[0]!.pemFile);
+
+    const rotatedForm = {
+      ...form,
+      terminals: [{ ...form.terminals[0]!, pemFile: rotatedPem }],
+    };
+    // The rotated form still passes the publish validator (parseable P-256 key).
+    expect(validateProcessorForm(rotatedForm)).toBeNull();
+
+    const after = buildRemoteConfigExport(rotatedForm)["1342061307"]!;
+    expect(after.topic).toBe(before.topic); // identity unchanged
+    expect(after.key).not.toBe(before.key); // credential rotated
   });
 });
 

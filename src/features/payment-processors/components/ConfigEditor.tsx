@@ -102,7 +102,12 @@ export function ConfigEditor({ initialGroupId }: { initialGroupId: string | null
       <ASecondary onClick={editor.onExport} disabled={editor.terminals.length === 0}>
         Export remote config
       </ASecondary>
-      {editor.exportJson ? <ExportPanel json={editor.exportJson} /> : null}
+      {editor.exportJson ? (
+        <ExportPanel
+          json={editor.exportJson}
+          fileName={`w3spay-remote-config-${editor.groupId || "config"}.json`}
+        />
+      ) : null}
       <div style={{ height: 8 }} />
       <ASecondary onClick={() => navigate({ to: "/payment-processors" })}>Cancel</ASecondary>
     </>

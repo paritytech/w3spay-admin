@@ -22,6 +22,7 @@ import {
   ASecondary,
 } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
+import { saveFile } from "@shared/utils/download.ts";
 
 export interface ReportDetailPanelProps {
   readonly entry: ReportIndexEntry;
@@ -341,15 +342,9 @@ function TransactionCard({ tx }: { tx: DailyReportTransaction }) {
 }
 
 function downloadReportJson(date: string, report: DailyReport): void {
-  try {
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `daily-report-${date}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (caught) {
-    console.warn("[reports] download failed", caught);
-  }
+  void saveFile({
+    fileName: `daily-report-${date}.json`,
+    content: JSON.stringify(report, null, 2),
+    mimeType: "application/json",
+  });
 }

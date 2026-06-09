@@ -41,9 +41,8 @@ function demoRegistrySnapshot(): ItemConfigRegistrySnapshot {
 }
 
 async function fetchRegistrySnapshot(): Promise<ItemConfigRegistrySnapshot> {
-  const records = await withSpan("item-configs.list", "chain.read", () =>
-    listItemConfigRecords(),
-  );
+  const records = await withSpan("w3spay-admin:item-configs.list", "chain.read", () =>
+    listItemConfigRecords(),);
   const gateway = resolveNetwork(envConfig.chain.network).ipfsGateway;
   const publishedSnapshots = new Map<string, PublishedConfigSnapshot>();
   await Promise.all(

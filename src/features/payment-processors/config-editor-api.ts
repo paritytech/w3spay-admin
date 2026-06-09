@@ -9,7 +9,6 @@ import type { ProcessorTerminalForm } from "./payment-processor-model.ts";
 
 export type UnlockState = "checking" | "locked" | "loading" | "ready";
 
-/** Everything the config-editor UI components consume from `useConfigEditor`. */
 export interface ConfigEditorApi {
   readonly unlock: UnlockState;
   readonly groupId: string;
@@ -31,6 +30,7 @@ export interface ConfigEditorApi {
   selectGroup(restaurant: Restaurant): void;
   isSelected(terminalId: string): boolean;
   toggleTerminal(merchant: AdminMerchant): Promise<void>;
+  regenerateKey(terminalId: string): Promise<void>;
   onUnlock(): Promise<void>;
   onPublish(): Promise<void>;
   onExport(): void;

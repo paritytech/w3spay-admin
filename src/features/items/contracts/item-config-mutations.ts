@@ -131,7 +131,7 @@ export function useItemConfigPublish(
       publishStartToast(showToast);
       // Headline journey: number of dirty configs only — NO config ids
       // (operator-chosen strings may identify the merchant).
-      journeyTracker.start("publish-item-configs", { "publish.count": dirtyIds.length });
+      journeyTracker.start("w3spay-admin:publish-item-configs", { "publish.count": dirtyIds.length });
       const done: string[] = [];
       try {
         for (let i = 0; i < dirtyIds.length; i += 1) {
@@ -142,7 +142,7 @@ export function useItemConfigPublish(
           if (!config) continue;
           try {
             const result = await withSpan(
-              "bulletin.publish.item-config",
+              "w3spay-admin:bulletin.publish.item-config",
               "bulletin.publish",
               () =>
                 publishItemConfig({
@@ -153,7 +153,7 @@ export function useItemConfigPublish(
               { "publish.size_bytes": 0 },
             );
             const idx = i < 100 ? String(i) : "99+";
-            journeyTracker.milestone("publish-item-configs", `bulletin-uploaded:${idx}`, {
+            journeyTracker.milestone("w3spay-admin:publish-item-configs", `bulletin-uploaded:${idx}`, {
               "publish.size_bytes": result.size,
             });
             await upsertItemConfig({
@@ -161,7 +161,7 @@ export function useItemConfigPublish(
               payload: { configId: config.id, cid: result.cid, size: result.size },
               onStatus: (status) => publishStatusToast(showToast, status),
             });
-            journeyTracker.milestone("publish-item-configs", `registry-upserted:${idx}`);
+            journeyTracker.milestone("w3spay-admin:publish-item-configs", `registry-upserted:${idx}`);
             optimisticallyPublish({
               configId: config.id,
               cid: result.cid,
@@ -171,7 +171,7 @@ export function useItemConfigPublish(
             });
             done.push(config.id);
           } catch (caught) {
-            journeyTracker.fail("publish-item-configs", categorizePublishError(caught), caught);
+            journeyTracker.fail("w3spay-admin:publish-item-configs", categorizePublishError(caught), caught);
             const reason = caught instanceof Error ? caught.message : String(caught);
             setPublishProgress({ kind: "error", configId, reason });
             publishFailureToast(showToast, reason);
@@ -180,7 +180,7 @@ export function useItemConfigPublish(
         }
         setPublishProgress({ kind: "success", configIds: done });
         publishSuccessToast(showToast, done.length);
-        journeyTracker.complete("publish-item-configs", { "publish.completed": done.length });
+        journeyTracker.complete("w3spay-admin:publish-item-configs", { "publish.completed": done.length });
         // Reconcile the optimistic cache against the chain enumeration.
         void queryClient.invalidateQueries({ queryKey: queryRoots.itemConfigRegistry });
         return { ok: true, configIds: done };

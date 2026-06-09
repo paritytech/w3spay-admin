@@ -55,9 +55,8 @@ export function restaurantRegistryQueryOptions() {
     queryFn: (): Promise<ReadonlyArray<Restaurant>> =>
       isDemoMode()
         ? Promise.resolve(getDemoRestaurants())
-        : withSpan("merchant-profile-registry.list", "chain.read", async () =>
-            (await listMerchantProfiles(resolveRegistryAddress())).map(recordToRestaurant),
-          ),
+        : withSpan("w3spay-admin:merchant-profile-registry.list", "chain.read", async () =>
+            (await listMerchantProfiles(resolveRegistryAddress())).map(recordToRestaurant),),
     // A real empty address is surfaced as a config-error, not a failed fetch.
     enabled: isDemoMode() || restaurantRegistryConfigured(),
     refetchInterval: RESTAURANT_REGISTRY_POLL_MS,

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // @paritytech
 
+import { useState } from "react";
+
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import { shortAddr, shortTerminalId } from "@features/merchant/merchant-model.ts";
-import { ACard, AField, AMono } from "@shared/components/primitives.tsx";
+import { ACard, AField, AGhost, AMono, ASecondary } from "@shared/components/primitives.tsx";
 import { CopyableRow } from "@shared/components/CopyableRow.tsx";
 import { Icon } from "@shared/components/Icon.tsx";
 import { COLOR } from "@shared/components/tokens.ts";
@@ -107,8 +109,49 @@ function TerminalCard({ merchant: m, editor }: { merchant: AdminMerchant; editor
             Auto-generated from the platform CSPRNG, stored on this device, and published inside the
             encrypted bundle.
           </div>
+          <RegenerateKeyControl
+            disabled={generating}
+            onRegenerate={() => void editor.regenerateKey(m.terminalId)}
+          />
         </div>
       ) : null}
     </ACard>
+  );
+}
+
+function RegenerateKeyControl({
+  disabled,
+  onRegenerate,
+}: {
+  disabled: boolean;
+  onRegenerate: () => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+
+  if (!confirm) {
+    return (
+      <div style={{ marginTop: 6 }}>
+        <AGhost onClick={() => setConfirm(true)}>Regenerate key…</AGhost>
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <span style={{ flex: "1 1 200px", fontSize: 11, color: COLOR.redSoft, lineHeight: 1.5 }}>
+        Replace this terminal's P-256 key? Publish the config and re-provision the terminal
+        (new remote-config export) afterwards — payments encrypted to the old key won't decode.
+      </span>
+      <AGhost onClick={() => setConfirm(false)}>Cancel</AGhost>
+      <ASecondary
+        full={false}
+        disabled={disabled}
+        onClick={() => {
+          setConfirm(false);
+          onRegenerate();
+        }}
+      >
+        Regenerate key
+      </ASecondary>
+    </div>
   );
 }

@@ -65,7 +65,7 @@ export async function writeMerchantRegistry(
 ): Promise<`0x${string}`> {
   const { context, functionName, args, onStatus, waitForChainEffect } = options;
   return withSpan(
-    "revive.write",
+    "w3spay-admin:revive.write",
     "chain.write",
     async () => {
       try {

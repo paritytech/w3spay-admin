@@ -28,9 +28,8 @@ export function merchantRegistryQueryOptions() {
     queryFn: (): Promise<ReadonlyArray<RegistryMerchantRow>> =>
       isDemoMode()
         ? Promise.resolve(getDemoMerchantRows())
-        : withSpan("merchant-registry.list", "chain.read", () =>
-            listMerchantEntries(resolveRegistryAddress()),
-          ),
+        : withSpan("w3spay-admin:merchant-registry.list", "chain.read", () =>
+            listMerchantEntries(resolveRegistryAddress()),),
     // A real empty address is surfaced as a config-error, not a failed fetch.
     enabled: isDemoMode() || merchantRegistryConfigured(),
   });

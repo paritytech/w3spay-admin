@@ -19,7 +19,7 @@ import {
   type ProcessorTerminalForm,
 } from "./payment-processor-model.ts";
 import { buildRemoteConfigExport } from "./remote-config-export.ts";
-import { generateTerminalSecret } from "./secret-generation.ts";
+import { generateP256PrivateKeyPem, generateTerminalSecret } from "./secret-generation.ts";
 import { useTerminalSecrets } from "./store/use-terminal-secrets-store.ts";
 import { useProcessorConfigCache } from "./store/use-processor-config-cache.ts";
 import { processorConfigRegistryQueryOptions } from "./contracts/processor-config-queries.ts";
@@ -172,6 +172,23 @@ export function useConfigEditor(initialGroupId: string | null): ConfigEditorApi 
     );
   };
 
+  const regenerateKey = async (terminalId: string) => {
+    if (!secrets.hydrated || generatingId != null) return;
+    const existing = terminals.find((t) => t.terminalId === terminalId);
+    if (existing == null) return;
+    setError(null);
+    // The remote-config export embeds the public key — stale after rotation.
+    setExportJson(null);
+    setGeneratingId(terminalId);
+    try {
+      const pemFile = await generateP256PrivateKeyPem();
+      secrets.saveSecret(terminalId, { topicId: existing.topicId.trim().toLowerCase(), pemFile });
+      setTerminals((prev) => prev.map((t) => (t.terminalId === terminalId ? { ...t, pemFile } : t)));
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
   const onPublish = async () => {
     const form = formForGroup();
     if (form == null) {
@@ -241,6 +258,7 @@ export function useConfigEditor(initialGroupId: string | null): ConfigEditorApi 
     },
     isSelected: (terminalId) => terminals.some((t) => t.terminalId === terminalId),
     toggleTerminal,
+    regenerateKey,
     onUnlock,
     onPublish,
     onExport,

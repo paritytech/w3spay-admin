@@ -49,9 +49,9 @@ export function useSessionSync(): void {
   // the gate's own subscription, so this adds no extra chain read.
   const isAdmin = useIsAdmin(readyAccount?.adminH160 ?? null);
   useEffect(() => {
-    if (!journeyTracker.isActive("app-boot")) return;
+    if (!journeyTracker.isActive("w3spay-admin:app-boot")) return;
     if (hostChainSupport != null) {
-      journeyTracker.milestone("app-boot", "host-detected", {
+      journeyTracker.milestone("w3spay-admin:app-boot", "host-detected", {
         "boot.host_chain_support": hostChainSupport.kind,
       });
     }
@@ -60,13 +60,13 @@ export function useSessionSync(): void {
       accountState.kind !== "resolving" &&
       accountState.kind !== "requesting"
     ) {
-      journeyTracker.milestone("app-boot", "account-resolved", {
+      journeyTracker.milestone("w3spay-admin:app-boot", "account-resolved", {
         "boot.identity_state": accountState.kind,
       });
     }
     const isAdminKind = isAdmin.state.kind;
     if (isAdminKind !== "idle" && isAdminKind !== "checking") {
-      journeyTracker.milestone("app-boot", "admin-check-resolved", {
+      journeyTracker.milestone("w3spay-admin:app-boot", "admin-check-resolved", {
         "boot.is_admin": isAdmin.granted,
       });
     }

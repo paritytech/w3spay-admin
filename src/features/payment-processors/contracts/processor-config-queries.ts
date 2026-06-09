@@ -40,9 +40,8 @@ export function processorConfigRegistryQueryOptions() {
     queryFn: (): Promise<ReadonlyArray<ProcessorConfigRegistryRecord>> =>
       isDemoMode()
         ? Promise.resolve(getDemoProcessorConfigs())
-        : withSpan("processor-config-registry.list", "chain.read", () =>
-            listProcessorConfigRecords(resolveRegistryAddress()),
-          ),
+        : withSpan("w3spay-admin:processor-config-registry.list", "chain.read", () =>
+            listProcessorConfigRecords(resolveRegistryAddress()),),
     enabled: isDemoMode() || processorConfigRegistryConfigured(),
     refetchInterval: PROCESSOR_CONFIG_REGISTRY_POLL_MS,
   });

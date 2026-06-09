@@ -4,18 +4,27 @@
 import { ACard, ASecondary } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
 import { useFeedbackStore } from "@shared/store/use-feedback-store.ts";
+import { saveFile } from "@shared/utils/download.ts";
 
 /** Remote-config JSON for the current form: terminalId → `{ topic, key, name }`. */
-export function ExportPanel({ json }: { json: string }) {
+export function ExportPanel({ json, fileName }: { json: string; fileName: string }) {
   const copyValue = useFeedbackStore((s) => s.copyValue);
   const copied = useFeedbackStore((s) => s.copiedField) === "remote-config-json";
   return (
     <ACard padding={12} style={{ marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 12, color: COLOR.text2, fontWeight: 600 }}>Remote config</span>
-        <ASecondary full={false} onClick={() => copyValue(json, "remote-config-json")}>
-          {copied ? "Copied" : "Copy JSON"}
-        </ASecondary>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ASecondary
+            full={false}
+            onClick={() => void saveFile({ fileName, content: json, mimeType: "application/json" })}
+          >
+            Save JSON
+          </ASecondary>
+          <ASecondary full={false} onClick={() => copyValue(json, "remote-config-json")}>
+            {copied ? "Copied" : "Copy JSON"}
+          </ASecondary>
+        </div>
       </div>
       <pre
         style={{

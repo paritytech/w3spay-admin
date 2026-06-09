@@ -78,7 +78,7 @@ function wrapOnStatusForJourney(
       status === "in-block" ||
       status === "finalized"
     ) {
-      journeyTracker.milestone("chain-write", status);
+      journeyTracker.milestone("w3spay-admin:chain-write", status);
     }
   };
 }
@@ -161,7 +161,7 @@ export function useMerchantWrites(options: {
     setSubmitState("signing");
     setSubmitMessage(null);
     setWriteInFlight(true);
-    journeyTracker.start("chain-write", { "chain.write.op": "register-merchant" satisfies WriteOp });
+    journeyTracker.start("w3spay-admin:chain-write", { "chain.write.op": "register-merchant" satisfies WriteOp });
     try {
       const txHash = await actions.registerMerchant(
         { merchantId, terminalId, destinationAccountId, displayName },
@@ -186,10 +186,10 @@ export function useMerchantWrites(options: {
       setSubmitState("finalized");
       setSubmitMessage(`Registered. Tx ${txHash || "(no hash)"}`);
       onToast(`Registered ${displayName || terminalId}`);
-      journeyTracker.complete("chain-write");
+      journeyTracker.complete("w3spay-admin:chain-write");
       return computeTerminalKey(merchantId, terminalId);
     } catch (caught) {
-      journeyTracker.fail("chain-write", categorizeWriteError(caught), caught);
+      journeyTracker.fail("w3spay-admin:chain-write", categorizeWriteError(caught), caught);
       const reason = caught instanceof Error ? caught.message : String(caught);
       setSubmitState("error");
       setSubmitMessage(reason);
@@ -210,7 +210,7 @@ export function useMerchantWrites(options: {
       return;
     }
     setWriteInFlight(true);
-    journeyTracker.start("chain-write", { "chain.write.op": "set-status" satisfies WriteOp });
+    journeyTracker.start("w3spay-admin:chain-write", { "chain.write.op": "set-status" satisfies WriteOp });
     try {
       await actions.setMerchantStatus(
         { merchantId: merchant.merchantId, terminalId: merchant.terminalId, status: target },
@@ -224,9 +224,9 @@ export function useMerchantWrites(options: {
         : action === "revoke" ? "Revoked"
         : "Reinstated";
       onToast(`${label} ${merchant.name}`, action === "revoke" ? "warn" : "ok");
-      journeyTracker.complete("chain-write");
+      journeyTracker.complete("w3spay-admin:chain-write");
     } catch (caught) {
-      journeyTracker.fail("chain-write", categorizeWriteError(caught), caught);
+      journeyTracker.fail("w3spay-admin:chain-write", categorizeWriteError(caught), caught);
       const reason = caught instanceof Error ? caught.message : String(caught);
       onToast(`Status update failed: ${reason}`, "warn");
     } finally {
@@ -242,7 +242,7 @@ export function useMerchantWrites(options: {
       return false;
     }
     setWriteInFlight(true);
-    journeyTracker.start("chain-write", { "chain.write.op": "delete-merchant" satisfies WriteOp });
+    journeyTracker.start("w3spay-admin:chain-write", { "chain.write.op": "delete-merchant" satisfies WriteOp });
     try {
       await actions.deleteMerchant(
         { merchantId: merchant.merchantId, terminalId: merchant.terminalId },
@@ -253,10 +253,10 @@ export function useMerchantWrites(options: {
       // Deletion is permanent (row removed, not flagged), so the terminal toast
       // is `warn`-toned like revoke to stay distinct from a benign success.
       onToast(`Deleted ${merchant.name}`, "warn");
-      journeyTracker.complete("chain-write");
+      journeyTracker.complete("w3spay-admin:chain-write");
       return true;
     } catch (caught) {
-      journeyTracker.fail("chain-write", categorizeWriteError(caught), caught);
+      journeyTracker.fail("w3spay-admin:chain-write", categorizeWriteError(caught), caught);
       const reason = caught instanceof Error ? caught.message : String(caught);
       onToast(`Delete failed: ${reason}`, "warn");
       return false;
@@ -294,7 +294,7 @@ export function useMerchantWrites(options: {
     setSubmitState("signing");
     setSubmitMessage(null);
     setWriteInFlight(true);
-    journeyTracker.start("chain-write", { "chain.write.op": "set-destination" satisfies WriteOp });
+    journeyTracker.start("w3spay-admin:chain-write", { "chain.write.op": "set-destination" satisfies WriteOp });
     try {
       const txHash = await actions.setMerchantDestination(
         {
@@ -323,10 +323,10 @@ export function useMerchantWrites(options: {
       setSubmitState("finalized");
       setSubmitMessage(`Destination rotated. Tx ${txHash || "(no hash)"}`);
       onToast(`Rotated destination for ${merchant.name}`);
-      journeyTracker.complete("chain-write");
+      journeyTracker.complete("w3spay-admin:chain-write");
       return true;
     } catch (caught) {
-      journeyTracker.fail("chain-write", categorizeWriteError(caught), caught);
+      journeyTracker.fail("w3spay-admin:chain-write", categorizeWriteError(caught), caught);
       const reason = caught instanceof Error ? caught.message : String(caught);
       setSubmitState("error");
       setSubmitMessage(reason);

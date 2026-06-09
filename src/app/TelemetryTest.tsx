@@ -29,37 +29,37 @@ export function TelemetryTestScreen() {
 
   const testSuccessJourney = () => {
     // Use chain-write so the dashboard's saved search picks it up.
-    journeyTracker.start("chain-write", { "chain.write.op": "register-merchant" });
-    setTimeout(() => journeyTracker.milestone("chain-write", "signing"), 80);
-    setTimeout(() => journeyTracker.milestone("chain-write", "broadcasting"), 160);
-    setTimeout(() => journeyTracker.milestone("chain-write", "in-block"), 240);
+    journeyTracker.start("w3spay-admin:chain-write", { "chain.write.op": "register-merchant" });
+    setTimeout(() => journeyTracker.milestone("w3spay-admin:chain-write", "signing"), 80);
+    setTimeout(() => journeyTracker.milestone("w3spay-admin:chain-write", "broadcasting"), 160);
+    setTimeout(() => journeyTracker.milestone("w3spay-admin:chain-write", "in-block"), 240);
     setTimeout(() => {
-      journeyTracker.complete("chain-write", {});
+      journeyTracker.complete("w3spay-admin:chain-write", {});
       appendLog("chain-write completed");
     }, 320);
     appendLog("chain-write started");
   };
 
   const testFailedJourney = () => {
-    journeyTracker.start("chain-write", { "chain.write.op": "set-status" });
-    setTimeout(() => journeyTracker.milestone("chain-write", "signing"), 80);
+    journeyTracker.start("w3spay-admin:chain-write", { "chain.write.op": "set-status" });
+    setTimeout(() => journeyTracker.milestone("w3spay-admin:chain-write", "signing"), 80);
     setTimeout(() => {
-      journeyTracker.fail("chain-write", "user-rejected");
+      journeyTracker.fail("w3spay-admin:chain-write", "user-rejected");
       appendLog("chain-write failed (user-rejected)");
     }, 200);
     appendLog("chain-write started (will fail)");
   };
 
   const testPrivacyRegression = () => {
-    journeyTracker.start("chain-write", { "chain.write.op": "register-merchant" });
+    journeyTracker.start("w3spay-admin:chain-write", { "chain.write.op": "register-merchant" });
     // `txHash` matches SENSITIVE_KEY_RE (via the `tx_hash` segment) — the
     // guard refuses the write, logs a console.error, and drops the
     // attribute. The journey continues; the value never reaches Sentry.
-    journeyTracker.addAttributes("chain-write", {
+    journeyTracker.addAttributes("w3spay-admin:chain-write", {
       txHash: "0x1234567890abcdef1234567890abcdef12345678",
     });
     appendLog("privacy guard: refusal logged to console (attribute dropped)");
-    journeyTracker.complete("chain-write", {});
+    journeyTracker.complete("w3spay-admin:chain-write", {});
   };
 
   const flushQueue = async () => {

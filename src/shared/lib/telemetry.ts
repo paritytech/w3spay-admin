@@ -7,19 +7,19 @@ import { detectHostEnvironment } from "@shared/chain/host-connection.ts";
 
 /** Journey kinds emitted by the admin console. Keep the list small — each journey burns one span per session and adds a dashboard filter. */
 export type AppJourneyType =
-  | "app-boot"
-  | "chain-write"
-  | "publish-item-configs"
-  | "publish-processor-config"
-  | "merchant-table-load";
+  | "w3spay-admin:app-boot"
+  | "w3spay-admin:chain-write"
+  | "w3spay-admin:publish-item-configs"
+  | "w3spay-admin:publish-processor-config"
+  | "w3spay-admin:merchant-table-load";
 
 /** Sentry `op` for each journey's root span. Keep stable — changing them invalidates the dashboard's saved searches. */
 const APP_JOURNEY_OPS: Readonly<Record<AppJourneyType, string>> = {
-  "app-boot": "journey.app-boot",
-  "chain-write": "journey.chain-write",
-  "publish-item-configs": "journey.publish-item-configs",
-  "publish-processor-config": "journey.publish-processor-config",
-  "merchant-table-load": "journey.merchant-table-load",
+  "w3spay-admin:app-boot": "journey.w3spay-admin:app-boot",
+  "w3spay-admin:chain-write": "journey.w3spay-admin:chain-write",
+  "w3spay-admin:publish-item-configs": "journey.w3spay-admin:publish-item-configs",
+  "w3spay-admin:publish-processor-config": "journey.w3spay-admin:publish-processor-config",
+  "w3spay-admin:merchant-table-load": "journey.w3spay-admin:merchant-table-load",
 };
 
 /** Map the host-detection enum onto a short categorical tag for telemetry. */
