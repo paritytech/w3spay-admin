@@ -3,7 +3,7 @@
 
 import type { ReadyAdminAccount } from "@features/session/account.ts";
 import { envConfig } from "@/config";
-import { W3SPayMerchantRegistryABI } from "@shared/chain/registry-abi.ts";
+import { W3SPayRegistryABI } from "@shared/chain/registry-abi.ts";
 import {
   resolveRegistryAddress,
   writeMerchantRegistry,
@@ -36,7 +36,7 @@ export interface ItemConfigWriteActions {
 /**
  * Decoded shape of the `ItemConfigRecord` struct returned by the
  * registry's `getItemConfig(configId)` view. Mirrors the Solidity tuple
- * in `W3SPayMerchantRegistry.sol`.
+ * in `W3SPayRegistry.sol`.
  *
  * Owned here (consumer location) per the project's `ts-no-return-type`
  * rule — callers import this named interface rather than deriving the
@@ -75,7 +75,7 @@ function makeItemConfigEffectOracle(
   return async () => {
     const [entry] = await readContract<readonly [ItemConfigRecord]>(useMainClient().client, {
       address,
-      abi: W3SPayMerchantRegistryABI,
+      abi: W3SPayRegistryABI,
       functionName: "getItemConfig",
       args: [configId],
       origin: envConfig.chain.readOnlyOrigin,

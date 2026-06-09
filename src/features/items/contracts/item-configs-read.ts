@@ -4,7 +4,7 @@
 import { readContract } from "@/shared/chain/contracts";
 import { envConfig } from "@/config";
 import { useMainClient } from "@shared/chain/use-client.ts";
-import { W3SPayMerchantRegistryABI } from "@shared/chain/registry-abi.ts";
+import { W3SPayRegistryABI } from "@shared/chain/registry-abi.ts";
 import { resolveRegistryAddress } from "@shared/chain/merchant-registry-write.ts";
 
 interface RawItemConfigRecord {
@@ -35,7 +35,7 @@ export async function listItemConfigRecords(
   const origin = envConfig.chain.readOnlyOrigin;
   const ids = await readContract<readonly string[]>(client, {
     address: registryAddress,
-    abi: W3SPayMerchantRegistryABI,
+    abi: W3SPayRegistryABI,
     functionName: "getAllItemConfigIds",
     origin,
     at: "best",
@@ -45,7 +45,7 @@ export async function listItemConfigRecords(
     ids.map(async (configId) => {
       const [entry] = await readContract<[RawItemConfigRecord]>(client, {
         address: registryAddress,
-        abi: W3SPayMerchantRegistryABI,
+        abi: W3SPayRegistryABI,
         functionName: "getItemConfig",
         args: [configId],
         origin,

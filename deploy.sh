@@ -9,7 +9,7 @@
 #
 # Required env:
 #   - MNEMONIC or DOTNS_MNEMONIC      Deploying account (12- or 24-word phrase).
-#   - VITE_W3SPAY_REGISTRY_ADDRESS    Deployed W3SPayMerchantRegistry H160.
+#   - VITE_W3SPAY_REGISTRY_ADDRESS    Deployed W3SPayRegistry H160.
 #                                     May also live in `.env*`;
 #                                     this script enforces it ahead of the build
 #                                     so deploys never ship a bundle that boots

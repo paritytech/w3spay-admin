@@ -14,7 +14,7 @@ import {
   APrimary,
 } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
-import { slugify, type ItemConfig } from "@features/items/items-model.ts";
+import { normalizeSlug, type ItemConfig } from "@features/items/items-model.ts";
 import type { NewConfigForm } from "./ItemsNewConfig.tsx";
 
 export interface ItemsDuplicateConfigProps {
@@ -109,7 +109,7 @@ export function ItemsDuplicateConfig({
       >
         <AInput
           value={form.id}
-          onChange={(v) => setForm({ ...form, id: slugify(v) })}
+          onChange={(v) => setForm({ ...form, id: normalizeSlug(v) })}
           placeholder={`${source.id}-copy`}
           mono
         />

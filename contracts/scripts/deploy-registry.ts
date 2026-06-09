@@ -31,10 +31,10 @@ const APP_ROOT = resolve(CONTRACTS_ROOT, "..");
 const W3SPAY_APP_ROOT = resolve(APP_ROOT, "..", "w3spay");
 const ARTIFACT_PATH = resolve(
   CONTRACTS_ROOT,
-  "artifacts/src/W3SPayMerchantRegistry.sol/W3SPayMerchantRegistry.json",
+  "artifacts/src/W3SPayRegistry.sol/W3SPayRegistry.json",
 );
 const GAS_MULTIPLIER = 4n;
-const REGISTRY_ARTIFACT_NAME = "W3SPayMerchantRegistry";
+const REGISTRY_ARTIFACT_NAME = "W3SPayRegistry";
 
 interface Artifact {
   abi: Abi;
@@ -100,7 +100,7 @@ function loadArtifact(): Artifact {
   }
   const raw = JSON.parse(readFileSync(ARTIFACT_PATH, "utf8"));
   if (typeof raw.bytecode !== "string" || raw.bytecode === "0x") {
-    throw new Error("W3SPayMerchantRegistry artifact has empty bytecode.");
+    throw new Error("W3SPayRegistry artifact has empty bytecode.");
   }
   return { abi: raw.abi as Abi, bytecode: raw.bytecode as `0x${string}` };
 }
@@ -241,7 +241,7 @@ function writeDeployment(networkKey: string, address: `0x${string}`, txHash: str
   mkdirSync(deploymentDir, { recursive: true });
   writeFileSync(
     resolve(deploymentDir, "deployed_addresses.json"),
-    `${JSON.stringify({ [`W3SPayMerchantRegistry#${REGISTRY_ARTIFACT_NAME}`]: address }, null, 2)}\n`,
+    `${JSON.stringify({ [`W3SPayRegistry#${REGISTRY_ARTIFACT_NAME}`]: address }, null, 2)}\n`,
   );
   writeFileSync(
     resolve(deploymentDir, "deployment.json"),
@@ -299,7 +299,7 @@ async function main(): Promise<void> {
           "# Local-only env for `vite dev` / `vite build`. Gitignored.\n" +
           "#\n" +
           "# Written by `apps/w3spay-admin/contracts/scripts/deploy-registry.ts`\n" +
-          "# whenever the W3SPayMerchantRegistry is redeployed. Keep this in sync\n" +
+          "# whenever the W3SPayRegistry is redeployed. Keep this in sync\n" +
           "# with `apps/w3spay-admin/.env.local` — both apps must talk to the\n" +
           "# same on-chain registry.",
       });

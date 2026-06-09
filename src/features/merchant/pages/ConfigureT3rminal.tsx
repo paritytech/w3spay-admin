@@ -20,7 +20,7 @@ import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useItemConfigs } from "@features/items/contracts/use-item-configs.ts";
 import { useT3rminalAssignments } from "@shared/store/use-assignments-store.ts";
 import type { UseT3rminalAssignmentsResult } from "@shared/store/t3rminal-assignments.ts";
-import { useRestaurants } from "@features/restaurants/store/use-restaurants-store.ts";
+import { useRestaurants } from "@features/restaurants/contracts/use-restaurants.ts";
 import {
   buildT3rminalConfigPayloadV2,
   encodeT3rminalConfigPayloadV2,

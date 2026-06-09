@@ -10,6 +10,7 @@ export type AppJourneyType =
   | "app-boot"
   | "chain-write"
   | "publish-item-configs"
+  | "publish-processor-config"
   | "merchant-table-load";
 
 /** Sentry `op` for each journey's root span. Keep stable — changing them invalidates the dashboard's saved searches. */
@@ -17,6 +18,7 @@ const APP_JOURNEY_OPS: Readonly<Record<AppJourneyType, string>> = {
   "app-boot": "journey.app-boot",
   "chain-write": "journey.chain-write",
   "publish-item-configs": "journey.publish-item-configs",
+  "publish-processor-config": "journey.publish-processor-config",
   "merchant-table-load": "journey.merchant-table-load",
 };
 

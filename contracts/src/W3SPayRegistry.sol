@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "./interfaces/IW3SPayMerchantRegistry.sol";
+import "./interfaces/IW3SPayRegistry.sol";
 
 /**
- * @title W3SPayMerchantRegistry
+ * @title W3SPayRegistry
  * @notice Admin-managed on-chain `(merchantId, terminalId) → destinationAccountId`
  *         directory consumed by W3SPay products at boot.
- * @dev See IW3SPayMerchantRegistry for the rationale. Admin model mirrors
+ * @dev See IW3SPayRegistry for the rationale. Admin model mirrors
  *      `T3rminalTransactionLog`:
  *        - `owner`              transfers ownership, grants/revokes admin.
  *        - `admins[address]`    can write merchant rows.
@@ -16,7 +16,7 @@ import "./interfaces/IW3SPayMerchantRegistry.sol";
  *      `version` is bumped on every mutation so the off-chain cache can
  *      short-circuit a full re-read when nothing changed.
  */
-contract W3SPayMerchantRegistry is IW3SPayMerchantRegistry {
+contract W3SPayRegistry is IW3SPayRegistry {
     // ========== STATE ==========
 
     /// @notice Directory: terminalKey → row.
@@ -33,6 +33,25 @@ contract W3SPayMerchantRegistry is IW3SPayMerchantRegistry {
     string[] private allItemConfigIds;
     /// @notice 1-based position of each configId in `allItemConfigIds` (0 = absent). O(1) swap-and-pop.
     mapping(string => uint256) private itemConfigIdIndex;
+
+    /// @notice Processor-config CID directory: groupId → record.
+    mapping(string => ProcessorConfigRecord) private processorConfigs;
+    /// @notice Enumeration of every known processor-config groupId.
+    string[] private allProcessorConfigIds;
+    /// @notice 1-based position of each groupId in `allProcessorConfigIds` (0 = absent). O(1) swap-and-pop.
+    mapping(string => uint256) private processorConfigIdIndex;
+
+    /// @notice Merchant profiles: groupId → profile.
+    mapping(string => MerchantProfile) private merchantProfiles;
+    /// @notice Enumeration of every known merchant-profile groupId.
+    string[] private allMerchantProfileIds;
+    /// @notice 1-based position of each groupId in `allMerchantProfileIds` (0 = absent). O(1) swap-and-pop.
+    mapping(string => uint256) private merchantProfileIdIndex;
+
+    /// @notice Processor reports: keccak256(groupId|seq) → record. Immutable, append-only.
+    mapping(bytes32 => ProcessorReportRecord) private processorReports;
+    /// @notice Enumeration of report seqs per groupId.
+    mapping(string => uint64[]) private processorReportSeqs;
 
     address public owner;
     mapping(address => bool) private admins;
@@ -220,6 +239,130 @@ contract W3SPayMerchantRegistry is IW3SPayMerchantRegistry {
         emit ItemConfigRemoved(configId);
     }
 
+    // ========== PROCESSOR CONFIGS ==========
+
+    function upsertProcessorConfig(
+        string calldata groupId,
+        string calldata cid,
+        uint32 size
+    ) external override onlyAdmin {
+        require(bytes(groupId).length > 0, "Empty groupId");
+        require(bytes(cid).length > 0, "Empty cid");
+        require(size > 0, "Zero size");
+
+        ProcessorConfigRecord storage record = processorConfigs[groupId];
+        if (!record.exists) {
+            record.groupId = groupId;
+            allProcessorConfigIds.push(groupId);
+            processorConfigIdIndex[groupId] = allProcessorConfigIds.length; // 1-based
+            record.exists = true;
+        }
+        record.cid = cid;
+        record.size = size;
+        record.updatedAt = uint64(block.timestamp);
+
+        unchecked { version += 1; }
+
+        emit ProcessorConfigUpserted(groupId, cid, size);
+    }
+
+    function removeProcessorConfig(string calldata groupId) external override onlyAdmin {
+        ProcessorConfigRecord storage record = processorConfigs[groupId];
+        require(record.exists, "Unknown processorConfig");
+
+        _removeProcessorConfigIdFromEnumeration(groupId);
+        delete processorConfigs[groupId];
+
+        unchecked { version += 1; }
+
+        emit ProcessorConfigRemoved(groupId);
+    }
+
+    // ========== MERCHANT PROFILES ==========
+
+    function upsertMerchantProfile(
+        string calldata groupId,
+        string calldata merchantName,
+        string calldata merchantId,
+        string calldata addressLine1,
+        string calldata addressLine2,
+        string calldata phone,
+        string calldata taxId
+    ) external override onlyAdmin {
+        require(bytes(groupId).length > 0, "Empty groupId");
+        require(bytes(merchantName).length > 0, "Empty merchantName");
+        require(bytes(merchantId).length > 0, "Empty merchantId");
+
+        MerchantProfile storage profile = merchantProfiles[groupId];
+        if (!profile.exists) {
+            profile.groupId = groupId;
+            allMerchantProfileIds.push(groupId);
+            merchantProfileIdIndex[groupId] = allMerchantProfileIds.length; // 1-based
+            profile.exists = true;
+        }
+        profile.merchantName = merchantName;
+        profile.merchantId = merchantId;
+        profile.addressLine1 = addressLine1;
+        profile.addressLine2 = addressLine2;
+        profile.phone = phone;
+        profile.taxId = taxId;
+        profile.updatedAt = uint64(block.timestamp);
+
+        unchecked { version += 1; }
+
+        emit MerchantProfileUpserted(groupId, merchantName, merchantId);
+    }
+
+    function removeMerchantProfile(string calldata groupId) external override onlyAdmin {
+        MerchantProfile storage profile = merchantProfiles[groupId];
+        require(profile.exists, "Unknown merchantProfile");
+
+        _removeMerchantProfileIdFromEnumeration(groupId);
+        delete merchantProfiles[groupId];
+
+        unchecked { version += 1; }
+
+        emit MerchantProfileRemoved(groupId);
+    }
+
+    // ========== PROCESSOR REPORTS (permissionless) ==========
+
+    function addProcessorReport(
+        string calldata groupId,
+        uint64 seq,
+        string calldata cid,
+        uint32 size
+    ) external override {
+        require(bytes(groupId).length > 0, "Empty groupId");
+        require(bytes(cid).length > 0, "Empty cid");
+        require(size > 0, "Zero size");
+
+        bytes32 key = _reportKey(groupId, seq);
+        ProcessorReportRecord storage rec = processorReports[key];
+        if (rec.exists) {
+            // Idempotent retry only: same cid+size succeeds (no event); a
+            // different cid is rejected (records are immutable, first-writer-wins).
+            require(
+                keccak256(bytes(rec.cid)) == keccak256(bytes(cid)) && rec.size == size,
+                "Report exists"
+            );
+            return;
+        }
+
+        processorReports[key] = ProcessorReportRecord({
+            seq: seq,
+            cid: cid,
+            size: size,
+            committedAt: uint64(block.timestamp),
+            exists: true
+        });
+        processorReportSeqs[groupId].push(seq);
+
+        unchecked { version += 1; }
+
+        emit ProcessorReportAdded(groupId, seq, cid, size, msg.sender);
+    }
+
     // ========== ADMIN ==========
 
     function addAdmin(address admin) external override onlyOwner {
@@ -227,6 +370,17 @@ contract W3SPayMerchantRegistry is IW3SPayMerchantRegistry {
         require(!admins[admin], "Already admin");
         admins[admin] = true;
         emit AdminAdded(admin);
+    }
+
+    function bulkAddAdmins(address[] calldata newAdmins) external override onlyOwner {
+        for (uint256 i = 0; i < newAdmins.length; i++) {
+            address a = newAdmins[i];
+            require(a != address(0), "Zero admin");
+            if (!admins[a]) {
+                admins[a] = true;
+                emit AdminAdded(a);
+            }
+        }
     }
 
     function removeAdmin(address admin) external override onlyOwner {
@@ -311,6 +465,62 @@ contract W3SPayMerchantRegistry is IW3SPayMerchantRegistry {
         return allItemConfigIds.length;
     }
 
+    function getProcessorConfig(string calldata groupId)
+        external
+        view
+        override
+        returns (ProcessorConfigRecord memory)
+    {
+        return processorConfigs[groupId];
+    }
+
+    function getAllProcessorConfigIds() external view override returns (string[] memory) {
+        return allProcessorConfigIds;
+    }
+
+    function getProcessorConfigCount() external view override returns (uint256) {
+        return allProcessorConfigIds.length;
+    }
+
+    function getMerchantProfile(string calldata groupId)
+        external
+        view
+        override
+        returns (MerchantProfile memory)
+    {
+        return merchantProfiles[groupId];
+    }
+
+    function getAllMerchantProfileIds() external view override returns (string[] memory) {
+        return allMerchantProfileIds;
+    }
+
+    function getMerchantProfileCount() external view override returns (uint256) {
+        return allMerchantProfileIds.length;
+    }
+
+    function getProcessorReport(string calldata groupId, uint64 seq)
+        external
+        view
+        override
+        returns (ProcessorReportRecord memory)
+    {
+        return processorReports[_reportKey(groupId, seq)];
+    }
+
+    function getProcessorReportSeqs(string calldata groupId)
+        external
+        view
+        override
+        returns (uint64[] memory)
+    {
+        return processorReportSeqs[groupId];
+    }
+
+    function getProcessorReportCount(string calldata groupId) external view override returns (uint256) {
+        return processorReportSeqs[groupId].length;
+    }
+
     // ========== INTERNAL ==========
 
     function _terminalKey(string memory merchantId, string memory terminalId)
@@ -347,5 +557,37 @@ contract W3SPayMerchantRegistry is IW3SPayMerchantRegistry {
         }
         allItemConfigIds.pop();
         delete itemConfigIdIndex[configId];
+    }
+
+    function _reportKey(string memory g, uint64 s) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked(g, "|", s));
+    }
+
+    function _removeProcessorConfigIdFromEnumeration(string memory groupId) private {
+        uint256 position = processorConfigIdIndex[groupId]; // 1-based
+        require(position != 0, "GroupId not enumerated");
+        uint256 lastIndex = allProcessorConfigIds.length - 1;
+        uint256 targetIndex = position - 1;
+        if (targetIndex != lastIndex) {
+            string memory lastId = allProcessorConfigIds[lastIndex];
+            allProcessorConfigIds[targetIndex] = lastId;
+            processorConfigIdIndex[lastId] = position;
+        }
+        allProcessorConfigIds.pop();
+        delete processorConfigIdIndex[groupId];
+    }
+
+    function _removeMerchantProfileIdFromEnumeration(string memory groupId) private {
+        uint256 position = merchantProfileIdIndex[groupId]; // 1-based
+        require(position != 0, "GroupId not enumerated");
+        uint256 lastIndex = allMerchantProfileIds.length - 1;
+        uint256 targetIndex = position - 1;
+        if (targetIndex != lastIndex) {
+            string memory lastId = allMerchantProfileIds[lastIndex];
+            allMerchantProfileIds[targetIndex] = lastId;
+            merchantProfileIdIndex[lastId] = position;
+        }
+        allMerchantProfileIds.pop();
+        delete merchantProfileIdIndex[groupId];
     }
 }

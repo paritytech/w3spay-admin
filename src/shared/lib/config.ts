@@ -18,7 +18,7 @@ export interface TokenLocation {
 export interface EnvConfig {
   readonly contracts: {
     /**
-     * H160 address of the deployed `W3SPayMerchantRegistry`. Empty until
+     * H160 address of the deployed `W3SPayRegistry`. Empty until
      * `VITE_W3SPAY_REGISTRY_ADDRESS` is set; read sites MUST handle the empty case.
      */
     readonly merchantRegistryAddress: string;

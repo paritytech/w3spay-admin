@@ -49,6 +49,20 @@ export function slugify(s: string): string {
     .replace(/^-|-$/g, "");
 }
 
+/**
+ * Normalize a slug while the user is still typing. Same rules as `slugify`
+ * but does NOT strip a trailing dash, so the user can type "foo-bar" without
+ * the dash being swallowed after "foo-". The final value should still pass
+ * through `slugify` before being persisted.
+ */
+export function normalizeSlug(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-/, "")
+    .replace(/-{2,}/g, "-");
+}
+
 /** Format a CASH amount as a 2-decimal display string (no token suffix). */
 export function fmtCASH(n: CASH): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -26,7 +26,7 @@ export const CONTRACTS_ROOT = resolve(__dirname, "..", "..");
 export const APP_ROOT = resolve(CONTRACTS_ROOT, "..");
 export const REGISTRY_ARTIFACT_PATH = resolve(
   CONTRACTS_ROOT,
-  "artifacts/src/W3SPayMerchantRegistry.sol/W3SPayMerchantRegistry.json",
+  "artifacts/src/W3SPayRegistry.sol/W3SPayRegistry.json",
 );
 
 export const READ_ONLY_ORIGIN = "5C4hrfjw9DjXZTzV3MwzrrAr9P1MLDHajjSidz9bR544LEq1";
@@ -113,7 +113,7 @@ export function loadRegistryArtifact(): RegistryArtifact {
   }
   const raw = JSON.parse(readFileSync(REGISTRY_ARTIFACT_PATH, "utf8"));
   if (typeof raw.bytecode !== "string" || raw.bytecode === "0x") {
-    throw new Error("W3SPayMerchantRegistry artifact has empty bytecode.");
+    throw new Error("W3SPayRegistry artifact has empty bytecode.");
   }
   return { abi: raw.abi as Abi, bytecode: raw.bytecode as `0x${string}` };
 }

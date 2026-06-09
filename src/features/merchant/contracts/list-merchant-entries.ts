@@ -7,7 +7,7 @@ import { envConfig } from "@/config";
 import { useMainClient } from "@shared/chain/use-client.ts";
 import type { MerchantLifecycle, RegistryMerchantRow } from "@features/merchant/merchant-model.ts";
 import type { AccountId32Hex } from "@shared/lib/address.ts";
-import { W3SPayMerchantRegistryABI } from "@shared/chain/registry-abi.ts";
+import { W3SPayRegistryABI } from "@shared/chain/registry-abi.ts";
 import { resolveRegistryAddress } from "@shared/chain/merchant-registry-write.ts";
 
 interface RawMerchantEntry {
@@ -28,7 +28,7 @@ export async function listMerchantEntries(
   const origin = envConfig.chain.readOnlyOrigin;
   const keys = await readContract<readonly `0x${string}`[]>(client, {
     address: registryAddress,
-    abi: W3SPayMerchantRegistryABI,
+    abi: W3SPayRegistryABI,
     functionName: "getAllTerminalKeys",
     origin,
     at: "best",
@@ -38,7 +38,7 @@ export async function listMerchantEntries(
     keys.map(async (key) => {
       const [entry] = await readContract<[RawMerchantEntry]>(client, {
         address: registryAddress,
-        abi: W3SPayMerchantRegistryABI,
+        abi: W3SPayRegistryABI,
         functionName: "getMerchantByKey",
         args: [key],
         origin,

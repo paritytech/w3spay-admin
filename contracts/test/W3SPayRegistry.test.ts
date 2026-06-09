@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { W3SPayMerchantRegistry } from "../typechain-types";
+import { W3SPayRegistry } from "../typechain-types";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 const DEST_ALPHA_H160 = ethers.getAddress("0x1234567890abcdef1234567890abcdef12345678");
@@ -21,16 +21,16 @@ function expectedKey(merchantId: string, terminalId: string): string {
   );
 }
 
-describe("W3SPayMerchantRegistry", function () {
-  let registry: W3SPayMerchantRegistry;
+describe("W3SPayRegistry", function () {
+  let registry: W3SPayRegistry;
   let owner: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let outsider: HardhatEthersSigner;
 
   beforeEach(async function () {
     [owner, admin, outsider] = await ethers.getSigners();
-    const Registry = await ethers.getContractFactory("W3SPayMerchantRegistry");
-    registry = (await Registry.deploy()) as unknown as W3SPayMerchantRegistry;
+    const Registry = await ethers.getContractFactory("W3SPayRegistry");
+    registry = (await Registry.deploy()) as unknown as W3SPayRegistry;
     await registry.waitForDeployment();
   });
 
@@ -543,6 +543,231 @@ describe("W3SPayMerchantRegistry", function () {
       await expect(registry.connect(admin).removeItemConfig(CONFIG_ID))
         .to.emit(registry, "ItemConfigRemoved")
         .withArgs(CONFIG_ID);
+    });
+  });
+
+  describe("Processor configs", function () {
+    const GROUP_ID = "funkhaus-zola";
+    const CID = "bafkreigh2akiscaildc26b3xbcoab4y3afyywjcttzkv6f7vfyqgwwxe7q";
+    const CID_V2 = "bafkreihy42dxn4tewovkc2eivlb6srpxqg6w7n2pmtsh66wpodyl6pikje";
+    const SIZE = 512;
+    const SIZE_V2 = 640;
+
+    it("upsertProcessorConfig creates, bumps version, emits", async function () {
+      expect(await registry.getProcessorConfigCount()).to.equal(0);
+
+      await expect(registry.upsertProcessorConfig(GROUP_ID, CID, SIZE))
+        .to.emit(registry, "ProcessorConfigUpserted")
+        .withArgs(GROUP_ID, CID, SIZE);
+
+      expect(await registry.getVersion()).to.equal(1);
+      expect(await registry.getProcessorConfigCount()).to.equal(1);
+
+      const rec = await registry.getProcessorConfig(GROUP_ID);
+      expect(rec.exists).to.be.true;
+      expect(rec.groupId).to.equal(GROUP_ID);
+      expect(rec.cid).to.equal(CID);
+      expect(rec.size).to.equal(SIZE);
+      expect(rec.updatedAt).to.be.gt(0);
+      expect(await registry.getAllProcessorConfigIds()).to.deep.equal([GROUP_ID]);
+    });
+
+    it("upsertProcessorConfig updates an existing record without growing enumeration", async function () {
+      await registry.upsertProcessorConfig(GROUP_ID, CID, SIZE);
+      await expect(registry.upsertProcessorConfig(GROUP_ID, CID_V2, SIZE_V2))
+        .to.emit(registry, "ProcessorConfigUpserted")
+        .withArgs(GROUP_ID, CID_V2, SIZE_V2);
+
+      expect(await registry.getVersion()).to.equal(2);
+      expect(await registry.getProcessorConfigCount()).to.equal(1);
+      const rec = await registry.getProcessorConfig(GROUP_ID);
+      expect(rec.cid).to.equal(CID_V2);
+      expect(rec.size).to.equal(SIZE_V2);
+    });
+
+    it("removeProcessorConfig clears, emits, shrinks enumeration", async function () {
+      await registry.upsertProcessorConfig("a", CID, SIZE);
+      await registry.upsertProcessorConfig("b", CID_V2, SIZE_V2);
+      await registry.upsertProcessorConfig("c", CID, SIZE);
+
+      await expect(registry.removeProcessorConfig("b"))
+        .to.emit(registry, "ProcessorConfigRemoved")
+        .withArgs("b");
+
+      expect(await registry.getProcessorConfigCount()).to.equal(2);
+      expect((await registry.getProcessorConfig("b")).exists).to.be.false;
+      expect(Array.from(await registry.getAllProcessorConfigIds())).to.have.members(["a", "c"]);
+    });
+
+    it("onlyAdmin gating + empty-field reverts", async function () {
+      await expect(
+        registry.connect(outsider).upsertProcessorConfig(GROUP_ID, CID, SIZE)
+      ).to.be.revertedWith("Not admin");
+      await expect(registry.upsertProcessorConfig("", CID, SIZE)).to.be.revertedWith("Empty groupId");
+      await expect(registry.upsertProcessorConfig(GROUP_ID, "", SIZE)).to.be.revertedWith("Empty cid");
+      await expect(registry.upsertProcessorConfig(GROUP_ID, CID, 0)).to.be.revertedWith("Zero size");
+      await expect(registry.removeProcessorConfig("nope")).to.be.revertedWith("Unknown processorConfig");
+    });
+  });
+
+  describe("Merchant profiles", function () {
+    const GROUP_ID = "funkhaus-zola";
+    const NAME = "Zola";
+    const MERCHANT_ID = "funkhaus";
+
+    it("upsertMerchantProfile creates, bumps version, emits, round-trips all fields", async function () {
+      expect(await registry.getMerchantProfileCount()).to.equal(0);
+
+      await expect(
+        registry.upsertMerchantProfile(GROUP_ID, NAME, MERCHANT_ID, "1 Main St", "Suite 2", "+49 30 123", "DE123")
+      )
+        .to.emit(registry, "MerchantProfileUpserted")
+        .withArgs(GROUP_ID, NAME, MERCHANT_ID);
+
+      expect(await registry.getVersion()).to.equal(1);
+      expect(await registry.getMerchantProfileCount()).to.equal(1);
+
+      const p = await registry.getMerchantProfile(GROUP_ID);
+      expect(p.exists).to.be.true;
+      expect(p.groupId).to.equal(GROUP_ID);
+      expect(p.merchantName).to.equal(NAME);
+      expect(p.merchantId).to.equal(MERCHANT_ID);
+      expect(p.addressLine1).to.equal("1 Main St");
+      expect(p.addressLine2).to.equal("Suite 2");
+      expect(p.phone).to.equal("+49 30 123");
+      expect(p.taxId).to.equal("DE123");
+      expect(p.updatedAt).to.be.gt(0);
+      expect(await registry.getAllMerchantProfileIds()).to.deep.equal([GROUP_ID]);
+    });
+
+    it("update does not grow enumeration", async function () {
+      await registry.upsertMerchantProfile(GROUP_ID, NAME, MERCHANT_ID, "", "", "", "");
+      await registry.upsertMerchantProfile(GROUP_ID, "Zola Bar", MERCHANT_ID, "", "", "", "");
+      expect(await registry.getMerchantProfileCount()).to.equal(1);
+      expect((await registry.getMerchantProfile(GROUP_ID)).merchantName).to.equal("Zola Bar");
+    });
+
+    it("remove clears and shrinks enumeration", async function () {
+      await registry.upsertMerchantProfile("a", "A", "ma", "", "", "", "");
+      await registry.upsertMerchantProfile("b", "B", "mb", "", "", "", "");
+      await expect(registry.removeMerchantProfile("a"))
+        .to.emit(registry, "MerchantProfileRemoved")
+        .withArgs("a");
+      expect(await registry.getMerchantProfileCount()).to.equal(1);
+      expect((await registry.getMerchantProfile("a")).exists).to.be.false;
+      expect(Array.from(await registry.getAllMerchantProfileIds())).to.have.members(["b"]);
+    });
+
+    it("onlyAdmin gating + empty-field reverts", async function () {
+      await expect(
+        registry.connect(outsider).upsertMerchantProfile(GROUP_ID, NAME, MERCHANT_ID, "", "", "", "")
+      ).to.be.revertedWith("Not admin");
+      await expect(
+        registry.upsertMerchantProfile("", NAME, MERCHANT_ID, "", "", "", "")
+      ).to.be.revertedWith("Empty groupId");
+      await expect(
+        registry.upsertMerchantProfile(GROUP_ID, "", MERCHANT_ID, "", "", "", "")
+      ).to.be.revertedWith("Empty merchantName");
+      await expect(
+        registry.upsertMerchantProfile(GROUP_ID, NAME, "", "", "", "", "")
+      ).to.be.revertedWith("Empty merchantId");
+      await expect(registry.removeMerchantProfile("nope")).to.be.revertedWith("Unknown merchantProfile");
+    });
+  });
+
+  describe("Processor reports", function () {
+    const GROUP_ID = "funkhaus-zola";
+    const CID = "bafkreigh2akiscaildc26b3xbcoab4y3afyywjcttzkv6f7vfyqgwwxe7q";
+    const CID_V2 = "bafkreihy42dxn4tewovkc2eivlb6srpxqg6w7n2pmtsh66wpodyl6pikje";
+    const SIZE = 300;
+
+    it("permissionless write by a non-admin succeeds and emits with writer", async function () {
+      await expect(registry.connect(outsider).addProcessorReport(GROUP_ID, 1, CID, SIZE))
+        .to.emit(registry, "ProcessorReportAdded")
+        .withArgs(GROUP_ID, 1, CID, SIZE, outsider.address);
+
+      expect(await registry.getProcessorReportCount(GROUP_ID)).to.equal(1);
+      const rec = await registry.getProcessorReport(GROUP_ID, 1);
+      expect(rec.exists).to.be.true;
+      expect(rec.seq).to.equal(1);
+      expect(rec.cid).to.equal(CID);
+      expect(rec.size).to.equal(SIZE);
+      expect(rec.committedAt).to.be.gt(0);
+      expect(Array.from(await registry.getProcessorReportSeqs(GROUP_ID))).to.deep.equal([1n]);
+    });
+
+    it("re-adding the same (groupId, seq) with the same cid is a no-op", async function () {
+      await registry.connect(outsider).addProcessorReport(GROUP_ID, 7, CID, SIZE);
+      const versionAfterFirst = await registry.getVersion();
+      await expect(
+        registry.connect(outsider).addProcessorReport(GROUP_ID, 7, CID, SIZE)
+      ).to.not.emit(registry, "ProcessorReportAdded");
+      expect(await registry.getProcessorReportCount(GROUP_ID)).to.equal(1);
+      expect(await registry.getVersion()).to.equal(versionAfterFirst);
+    });
+
+    it("re-adding the same (groupId, seq) with a different cid reverts (immutable)", async function () {
+      await registry.connect(outsider).addProcessorReport(GROUP_ID, 7, CID, SIZE);
+      await expect(
+        registry.connect(outsider).addProcessorReport(GROUP_ID, 7, CID_V2, SIZE)
+      ).to.be.revertedWith("Report exists");
+    });
+
+    it("rejects empty groupId, empty cid, zero size", async function () {
+      await expect(registry.addProcessorReport("", 1, CID, SIZE)).to.be.revertedWith("Empty groupId");
+      await expect(registry.addProcessorReport(GROUP_ID, 1, "", SIZE)).to.be.revertedWith("Empty cid");
+      await expect(registry.addProcessorReport(GROUP_ID, 1, CID, 0)).to.be.revertedWith("Zero size");
+    });
+
+    it("distinct seqs accumulate under one group", async function () {
+      await registry.addProcessorReport(GROUP_ID, 1, CID, SIZE);
+      await registry.addProcessorReport(GROUP_ID, 2, CID_V2, SIZE);
+      expect(await registry.getProcessorReportCount(GROUP_ID)).to.equal(2);
+      expect(Array.from(await registry.getProcessorReportSeqs(GROUP_ID))).to.deep.equal([1n, 2n]);
+    });
+  });
+
+  describe("bulkAddAdmins", function () {
+    it("owner adds an array; each becomes admin with one AdminAdded per new admin", async function () {
+      const tx = await registry.bulkAddAdmins([admin.address, outsider.address]);
+      await expect(tx).to.emit(registry, "AdminAdded").withArgs(admin.address);
+      await expect(tx).to.emit(registry, "AdminAdded").withArgs(outsider.address);
+      expect(await registry.isAdmin(admin.address)).to.be.true;
+      expect(await registry.isAdmin(outsider.address)).to.be.true;
+    });
+
+    it("already-admin entries are skipped (no duplicate event)", async function () {
+      await registry.addAdmin(admin.address);
+      const tx = await registry.bulkAddAdmins([owner.address, admin.address, outsider.address]);
+      const receipt = await tx.wait();
+      const added = receipt.logs
+        .map((l) => {
+          try {
+            return registry.interface.parseLog(l);
+          } catch {
+            return null;
+          }
+        })
+        .filter((p) => p && p.name === "AdminAdded");
+      expect(added.length).to.equal(1);
+      expect(added[0].args[0]).to.equal(outsider.address);
+    });
+
+    it("reverts on the zero address", async function () {
+      await expect(registry.bulkAddAdmins([ethers.ZeroAddress])).to.be.revertedWith("Zero admin");
+    });
+
+    it("non-owner cannot bulk-add", async function () {
+      await expect(
+        registry.connect(outsider).bulkAddAdmins([outsider.address])
+      ).to.be.revertedWith("Not owner");
+    });
+
+    it("a bulk-added admin can then upsert a processor config", async function () {
+      await registry.bulkAddAdmins([admin.address]);
+      await expect(
+        registry.connect(admin).upsertProcessorConfig("g", "bafy-cid", 100)
+      ).to.emit(registry, "ProcessorConfigUpserted");
     });
   });
 });

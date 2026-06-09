@@ -5,33 +5,44 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
 
-import { useRestaurants } from "@features/restaurants/store/use-restaurants-store.ts";
+import type { TxStatus } from "@/shared/chain/contracts/index.ts";
+import { useSessionStore } from "@features/session/store/use-session-store.ts";
+import {
+  useRestaurants,
+  useRestaurantWrites,
+} from "@features/restaurants/contracts/use-restaurants.ts";
 import {
   EMPTY_RESTAURANT_FORM,
-  formToRestaurant,
   restaurantPickerHint,
   restaurantToForm,
   type RestaurantForm as RestaurantFormState,
 } from "@features/restaurants/restaurants.ts";
-import { APrimary, AGhost } from "@shared/components/primitives.tsx";
+import { APrimary } from "@shared/components/primitives.tsx";
 import { Icon } from "@shared/components/Icon.tsx";
-import { COLOR } from "@shared/components/tokens.ts";
 
 import { RestaurantsList } from "@features/restaurants/components/RestaurantsList.tsx";
 import { RestaurantForm } from "@features/restaurants/components/RestaurantForm.tsx";
+import { HydratingNotice, MissingRestaurant } from "@features/restaurants/components/RestaurantsNotices.tsx";
+import { RestaurantsListSkeleton } from "@features/restaurants/components/RestaurantsListSkeleton.tsx";
 
 export type RestaurantsView =
   | { kind: "list" }
   | { kind: "new"; from?: string }
   | { kind: "edit"; restaurantId: string };
 
+const SIGN_IN_REQUIRED = "Sign in via the Polkadot host to publish restaurant profiles on-chain.";
+
 export function Restaurants({ view }: { view: RestaurantsView }) {
   const navigate = useNavigate();
   const restaurants = useRestaurants();
+  const readyAccount = useSessionStore((s) => s.readyAccount);
+  const writes = useRestaurantWrites(readyAccount);
   const [newForm, setNewForm] = useState<RestaurantFormState>(EMPTY_RESTAURANT_FORM);
   const [editForm, setEditForm] = useState<RestaurantFormState>(EMPTY_RESTAURANT_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [txStatus, setTxStatus] = useState<TxStatus | null>(null);
+  const busy = txStatus != null;
 
   const sorted = useMemo(() => {
     const list = Array.from(restaurants.restaurants.values());
@@ -61,31 +72,48 @@ export function Restaurants({ view }: { view: RestaurantsView }) {
         navigate({ to: "/restaurants" });
       }
     };
-    const submit = () => {
+    const submit = async () => {
+      if (writes == null) {
+        setError(SIGN_IN_REQUIRED);
+        return;
+      }
       const trimmedId = newForm.id.trim();
       if (trimmedId.length === 0) {
         setError("Restaurant ID is required.");
+        return;
+      }
+      if (newForm.name.trim().length === 0) {
+        setError("Restaurant name is required.");
+        return;
+      }
+      if (newForm.merchantId.trim().length === 0) {
+        setError("Merchant ID is required.");
         return;
       }
       if (restaurants.getRestaurant(trimmedId) != null) {
         setError(`A restaurant with id "${trimmedId}" already exists.`);
         return;
       }
-      const restaurant = formToRestaurant(newForm);
-      if (restaurant == null) {
-        setError("Restaurant name is required.");
+      setError(null);
+      try {
+        await writes.upsert(newForm, setTxStatus);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+        setTxStatus(null);
         return;
       }
-      restaurants.upsertRestaurant(restaurant);
+      setTxStatus(null);
       setNewForm(EMPTY_RESTAURANT_FORM);
-      setError(null);
       if (returnTo) {
-        // Stage the picker hint BEFORE navigating — the configure
-        // screen claims it during its first mount-side effect.
-        restaurantPickerHint.set(returnTo, restaurant.id);
+        // Stage the picker hint BEFORE navigating — the configure screen
+        // claims it during its first mount-side effect and holds it until the
+        // freshly-published record lands in the polled map.
+        restaurantPickerHint.set(returnTo, trimmedId);
         navigate({ to: "/merchants/$merchantKey/configure", params: { merchantKey: returnTo } });
       } else {
-        navigate({ to: "/restaurants/$restaurantId", params: { restaurantId: restaurant.id } });
+        // The just-published record may not be in the polled snapshot yet;
+        // return to the list, which converges on the next poll.
+        navigate({ to: "/restaurants" });
       }
     };
     return (
@@ -97,6 +125,8 @@ export function Restaurants({ view }: { view: RestaurantsView }) {
           if (error) setError(null);
         }}
         error={error}
+        busy={busy}
+        txStatus={txStatus}
         cancelLabel={returnTo ? "Cancel & return" : "Cancel"}
         onBack={cancel}
         onSubmit={submit}
@@ -117,19 +147,44 @@ export function Restaurants({ view }: { view: RestaurantsView }) {
         />
       );
     }
-    const submit = () => {
-      const restaurant = formToRestaurant(editForm);
-      if (restaurant == null) {
+    const submit = async () => {
+      if (writes == null) {
+        setError(SIGN_IN_REQUIRED);
+        return;
+      }
+      if (editForm.name.trim().length === 0) {
         setError("Restaurant name is required.");
         return;
       }
-      restaurants.upsertRestaurant({ ...restaurant, id: target.id });
+      if (editForm.merchantId.trim().length === 0) {
+        setError("Merchant ID is required.");
+        return;
+      }
       setError(null);
+      try {
+        await writes.upsert({ ...editForm, id: target.id }, setTxStatus);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+        setTxStatus(null);
+        return;
+      }
+      setTxStatus(null);
       navigate({ to: "/restaurants" });
     };
-    const remove = () => {
-      restaurants.removeRestaurant(target.id);
+    const remove = async () => {
+      if (writes == null) {
+        setError(SIGN_IN_REQUIRED);
+        return;
+      }
       setError(null);
+      try {
+        await writes.remove(target.id, setTxStatus);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+        setTxStatus(null);
+        return;
+      }
+      setTxStatus(null);
       navigate({ to: "/restaurants" });
     };
     return (
@@ -141,11 +196,17 @@ export function Restaurants({ view }: { view: RestaurantsView }) {
           if (error) setError(null);
         }}
         error={error}
+        busy={busy}
+        txStatus={txStatus}
         onBack={() => navigate({ to: "/restaurants" })}
         onSubmit={submit}
         onDelete={remove}
       />
     );
+  }
+
+  if (!restaurants.hydrated && sorted.length === 0) {
+    return <RestaurantsListSkeleton />;
   }
 
   return (
@@ -164,27 +225,6 @@ export function Restaurants({ view }: { view: RestaurantsView }) {
       >
         <Icon name="plus" size={14} /> New restaurant
       </APrimary>
-    </>
-  );
-}
-
-function HydratingNotice() {
-  return (
-    <div style={{ marginTop: 24, color: COLOR.muted, fontSize: 13 }}>
-      Loading restaurants…
-    </div>
-  );
-}
-
-function MissingRestaurant({ id, onBack }: { id: string; onBack: () => void }) {
-  return (
-    <>
-      <AGhost onClick={onBack}>
-        <Icon name="chevron-left" size={14} /> Back
-      </AGhost>
-      <div style={{ marginTop: 24, color: COLOR.muted, fontSize: 13 }}>
-        No restaurant with id "{id}".
-      </div>
     </>
   );
 }

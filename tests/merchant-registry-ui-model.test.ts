@@ -95,7 +95,7 @@ describe("defaultT3rminalDisplayName", () => {
 });
 
 describe("computeTerminalKey", () => {
-  // Pinned against the contract fixture `W3SPayMerchantRegistry.test.ts::expectedKey` —
+  // Pinned against the contract fixture `W3SPayRegistry.test.ts::expectedKey` —
   // drift on either side breaks this case first.
   it("matches the contract's keccak256(merchantId || '|' || terminalId) for the canonical pair", () => {
     expect(computeTerminalKey("funkhaus", "bar-east-01")).toBe(

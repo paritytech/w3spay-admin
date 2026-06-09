@@ -11,6 +11,17 @@ import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
 
 import { App } from "@app/App.tsx";
+// Self-hosted fonts (bundled into dist) — no runtime fetch to Google Fonts.
+import "@fontsource/dm-sans/latin-300.css";
+import "@fontsource/dm-sans/latin-400.css";
+import "@fontsource/dm-sans/latin-500.css";
+import "@fontsource/dm-sans/latin-600.css";
+import "@fontsource/dm-sans/latin-700.css";
+import "@fontsource/dm-serif-display/latin-400.css";
+import "@fontsource/dm-serif-display/latin-400-italic.css";
+import "@fontsource/jetbrains-mono/latin-400.css";
+import "@fontsource/jetbrains-mono/latin-500.css";
+import "@fontsource/jetbrains-mono/latin-600.css";
 import "./styles.css";
 
 const container = document.getElementById("root");

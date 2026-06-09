@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 /**
- * @title IW3SPayMerchantRegistry
+ * @title IW3SPayRegistry
  * @notice Admin-managed on-chain `(merchantId, terminalId) → destinationAccountId`
  *         directory consumed by W3SPay products at boot.
  * @dev Storage key is `terminalKey = keccak256(abi.encodePacked(merchantId, "|", terminalId))`.
@@ -16,7 +16,7 @@ pragma solidity ^0.8.24;
  *      remain Solidity `address` semantics because `msg.sender` and
  *      `admins[address]` are H160 values under pallet-revive.
  */
-interface IW3SPayMerchantRegistry {
+interface IW3SPayRegistry {
     // ========== TYPES ==========
 
     enum MerchantStatus {
@@ -46,6 +46,46 @@ interface IW3SPayMerchantRegistry {
         string cid;
         uint32 size;
         uint64 updatedAt;
+        bool exists;
+    }
+
+    /// @notice CID record for an encrypted payment-processor config envelope
+    /// published on Bulletin Chain, keyed by the processor's `groupId`. The
+    /// envelope ciphertext is content-addressed; only its CID + byte size live
+    /// on-chain. Same renewal caveat as `ItemConfigRecord`.
+    struct ProcessorConfigRecord {
+        string groupId;
+        string cid;
+        uint32 size;
+        uint64 updatedAt;
+        bool exists;
+    }
+
+    /// @notice Public, human-facing profile for a merchant/group, keyed by
+    /// `groupId`. Supplies the `profile` block embedded in a published
+    /// processor config (`merchantName` + `merchantId`) plus optional receipt
+    /// metadata. Distinct from `MerchantEntry`, which is a per-terminal payout row.
+    struct MerchantProfile {
+        string groupId;
+        string merchantName;
+        string merchantId;
+        string addressLine1;
+        string addressLine2;
+        string phone;
+        string taxId;
+        uint64 updatedAt;
+        bool exists;
+    }
+
+    /// @notice CID record for an encrypted X/Z report published on Bulletin
+    /// Chain by a merchant device, keyed by `(groupId, seq)`. Records are
+    /// immutable: the first writer of a `(groupId, seq)` pair wins; an
+    /// identical re-write is a no-op, a conflicting one reverts.
+    struct ProcessorReportRecord {
+        uint64 seq;
+        string cid;
+        uint32 size;
+        uint64 committedAt;
         bool exists;
     }
 
@@ -102,6 +142,12 @@ interface IW3SPayMerchantRegistry {
 
     event ItemConfigRemoved(string configId);
 
+    event ProcessorConfigUpserted(string groupId, string cid, uint32 size);
+    event ProcessorConfigRemoved(string groupId);
+    event MerchantProfileUpserted(string groupId, string merchantName, string merchantId);
+    event MerchantProfileRemoved(string groupId);
+    event ProcessorReportAdded(string groupId, uint64 seq, string cid, uint32 size, address writer);
+
     // ========== WRITES (onlyAdmin) ==========
 
     function registerMerchant(
@@ -151,11 +197,41 @@ interface IW3SPayMerchantRegistry {
 
     function removeItemConfig(string calldata configId) external;
 
+    function upsertProcessorConfig(
+        string calldata groupId,
+        string calldata cid,
+        uint32 size
+    ) external;
+
+    function removeProcessorConfig(string calldata groupId) external;
+
+    function upsertMerchantProfile(
+        string calldata groupId,
+        string calldata merchantName,
+        string calldata merchantId,
+        string calldata addressLine1,
+        string calldata addressLine2,
+        string calldata phone,
+        string calldata taxId
+    ) external;
+
+    function removeMerchantProfile(string calldata groupId) external;
+
+    /// @notice Permissionless: any merchant device records its own encrypted
+    ///         report CID. Records are immutable per `(groupId, seq)`.
+    function addProcessorReport(
+        string calldata groupId,
+        uint64 seq,
+        string calldata cid,
+        uint32 size
+    ) external;
+
     // ========== ADMIN (onlyOwner) ==========
 
     function addAdmin(address admin) external;
     function removeAdmin(address admin) external;
     function transferOwnership(address newOwner) external;
+    function bulkAddAdmins(address[] calldata newAdmins) external;
 
     // ========== VIEWS ==========
 
@@ -170,4 +246,16 @@ interface IW3SPayMerchantRegistry {
     function getItemConfig(string calldata configId) external view returns (ItemConfigRecord memory);
     function getAllItemConfigIds() external view returns (string[] memory);
     function getItemConfigCount() external view returns (uint256);
+
+    function getProcessorConfig(string calldata groupId) external view returns (ProcessorConfigRecord memory);
+    function getAllProcessorConfigIds() external view returns (string[] memory);
+    function getProcessorConfigCount() external view returns (uint256);
+
+    function getMerchantProfile(string calldata groupId) external view returns (MerchantProfile memory);
+    function getAllMerchantProfileIds() external view returns (string[] memory);
+    function getMerchantProfileCount() external view returns (uint256);
+
+    function getProcessorReport(string calldata groupId, uint64 seq) external view returns (ProcessorReportRecord memory);
+    function getProcessorReportSeqs(string calldata groupId) external view returns (uint64[] memory);
+    function getProcessorReportCount(string calldata groupId) external view returns (uint256);
 }

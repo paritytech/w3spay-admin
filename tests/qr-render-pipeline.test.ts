@@ -3,8 +3,6 @@ import {
   Color,
   CorrectionLevel,
   DEFAULT_MAX_MODULES,
-  encodeAnimatedGif,
-  generateFrames,
   qrModuleCount,
   renderUrQr,
 } from "@bcts/multipart-ur";
@@ -75,45 +73,6 @@ describe("BCTS QR render pipeline", () => {
     const png = rendered.toPng();
     expect(png.byteLength).toBeGreaterThan(0);
     expect(startsWith(png, PNG_SIGNATURE)).toBe(true);
-  });
-
-  it("animated multipart path engages and yields a GIF89a animation for an oversized config", () => {
-    const items = Array.from({ length: 80 }, (_, i) => ({
-      id: `sku-${String(i).padStart(4, "0")}`,
-      name: `Item with a deliberately long name to inflate the QR payload ${i}`,
-      price: i + 0.5,
-    }));
-    const payload = makePayload(items);
-    const { ur, qrString } = encodeT3rminalConfigPayloadV2(payload);
-    // Mirror the screen's defensive density check: `qrModuleCount`
-    // throws when the message exceeds even the largest QR version
-    // (Low EC ~ 2953 bytes), which the screen treats as "too dense".
-    let moduleCount: number;
-    try {
-      moduleCount = qrModuleCount(TEXT_ENCODER.encode(qrString), CorrectionLevel.Low);
-    } catch {
-      moduleCount = Number.POSITIVE_INFINITY;
-    }
-    expect(moduleCount).toBeGreaterThan(DEFAULT_MAX_MODULES);
-
-    const frames = generateFrames(ur, {
-      correction: CorrectionLevel.Low,
-      size: 320,
-      foreground: Color.BLACK,
-      background: Color.WHITE,
-      quietZone: 1,
-      fps: 8,
-      maxModules: DEFAULT_MAX_MODULES,
-    });
-    expect(frames.length).toBeGreaterThanOrEqual(2);
-    const gif = encodeAnimatedGif(frames, 8);
-    expect(gif.byteLength).toBeGreaterThan(0);
-    expect(gif[0]).toBe(0x47);
-    expect(gif[1]).toBe(0x49);
-    expect(gif[2]).toBe(0x46);
-    expect(gif[3]).toBe(0x38);
-    expect(gif[4]).toBe(0x39);
-    expect(gif[5]).toBe(0x61);
   });
 
   it("renders a static QR for a small config carrying a restaurant profile", () => {

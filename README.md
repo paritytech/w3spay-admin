@@ -5,7 +5,7 @@
 
 This is code developed and published by Parity as an experimental proof-of-concept. It is **not** a Parity product or service, and Parity does not operate, host, deploy, or endorse any downstream deployment of it — downstream operators run their own forks at their own discretion.
 
-Mobile-first admin console for the W3sPay payment surface. The app manages merchant terminals, item configurations, balances, and transaction reports from inside a Polkadot host container, with a standalone browser mode for development and design review.
+Mobile-first admin console for the W3sPay payment surface. The app manages merchant terminals, item configurations, restaurants (on-chain merchant profiles), encrypted payment-processor configs (published to Bulletin, CID-indexed on the registry), balances, and transaction reports from inside a Polkadot host container, with a standalone browser mode for development and design review.
 
 ## Getting Started
 
@@ -17,7 +17,7 @@ cp .env.example .env.local        # set MNEMONIC and confirm VITE_* values
 npm run deploy                    # publishes the configured .dot product
 ```
 
-See **[DEPLOY.md](./DEPLOY.md)** for the full walkthrough: fresh registry deployment, environment setup, network selection, CI usage, and troubleshooting.
+See **[DEPLOY.md](./DEPLOY.md)** for the deploy process: environment setup, publishing the SPA, and fresh registry deployment.
 
 ### Contracts
 
@@ -59,6 +59,9 @@ npm run dev                       # http://localhost:5175
    ```
 
 5. Back in the app, tap **Check again**. Once `isAdmin(yourH160)` returns `true`, the admin console renders.
+
+   Alternatively, the registry **owner** can grant several admins at once from
+   the app: **Account → Registry admins** (one H160 per line; idempotent).
 
 
 ## Security
