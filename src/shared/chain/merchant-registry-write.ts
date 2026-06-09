@@ -18,7 +18,7 @@ import {
   type AccountId32Hex,
   type H160Hex,
 } from "@shared/lib/address.ts";
-import { W3SPayMerchantRegistryABI } from "./registry-abi.ts";
+import { W3SPayRegistryABI } from "./registry-abi.ts";
 
 export interface MerchantRegistryWriteContext {
   readonly signer: PolkadotSigner;
@@ -71,7 +71,7 @@ export async function writeMerchantRegistry(
       try {
         return await writeContract(useMainClient().client, {
           address: resolveRegistryAddress(context.registryAddress),
-          abi: W3SPayMerchantRegistryABI,
+          abi: W3SPayRegistryABI,
           functionName,
           args,
           signer: context.signer,
@@ -114,7 +114,7 @@ export function makeMerchantEffectOracle(
   return async () => {
     const [entry] = await readContract<readonly [MerchantEntry]>(useMainClient().client, {
       address,
-      abi: W3SPayMerchantRegistryABI,
+      abi: W3SPayRegistryABI,
       functionName: "getMerchant",
       args: [merchantId, terminalId],
       origin: envConfig.chain.readOnlyOrigin,

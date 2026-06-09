@@ -8,8 +8,6 @@
  * this sheet only handles the host/document chrome.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 *,
 *::before,
 *::after {
@@ -23,7 +21,14 @@ body,
   padding: 0;
   background: #0f0f0f;
   color: #fafaf9;
-  min-height: 100%;
+  /*
+   * Fixed-height app: the document never scrolls. AFrame and other
+   * inner regions own their own internal scroll. `overscroll-behavior`
+   * also suppresses iOS rubber-band over the locked surface.
+   */
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -32,15 +37,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  min-height: 100dvh;
-  /* Lock the document; AFrame owns its own internal scroll. */
-  overscroll-behavior: none;
 }
 
 #root {
   display: flex;
   justify-content: center;
-  min-height: 100dvh;
 }
 
 /* Phone-shaped column. On real phones this is the whole viewport; on a
@@ -50,7 +51,8 @@ body {
   position: relative;
   width: 100%;
   max-width: 430px;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: #0f0f0f;
@@ -98,4 +100,9 @@ body {
 @keyframes w3-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.45; }
+}
+
+@keyframes w3-skeleton {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
 }

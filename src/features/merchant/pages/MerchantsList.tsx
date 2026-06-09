@@ -40,7 +40,7 @@ export function MerchantsList({ density = "comfortable" }: MerchantsListProps) {
 
   return (
     <>
-      <AHead eyebrow="Directory" title="Merchants" size={32} />
+      <AHead eyebrow="Directory" title="Terminals" size={32} />
 
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         <Counter label="Total" value={total} />

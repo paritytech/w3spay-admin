@@ -7,6 +7,12 @@ export const queryKeys = {
   merchantRegistry: (network: string, registryAddress: string) =>
     ["merchant-registry", network, registryAddress] as const,
 
+  restaurantRegistry: (network: string, registryAddress: string) =>
+    ["restaurant-registry", network, registryAddress] as const,
+
+  processorConfigRegistry: (network: string, registryAddress: string) =>
+    ["processor-config-registry", network, registryAddress] as const,
+
   isAdmin: (adminH160: string | null, registryAddress: string) =>
     ["is-admin", adminH160, registryAddress] as const,
 
@@ -28,6 +34,8 @@ export const queryKeys = {
 /** Root prefixes for `invalidateQueries({ queryKey: ROOT })`. */
 export const queryRoots = {
   merchantRegistry: ["merchant-registry"] as const,
+  restaurantRegistry: ["restaurant-registry"] as const,
+  processorConfigRegistry: ["processor-config-registry"] as const,
   isAdmin: ["is-admin"] as const,
   reportIndex: ["report-index"] as const,
   reportIndices: ["report-indices"] as const,

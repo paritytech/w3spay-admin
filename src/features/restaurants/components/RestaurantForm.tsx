@@ -15,10 +15,12 @@ import {
   ASecondary,
 } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
-import { slugify } from "@features/items/items-model.ts";
+import { normalizeSlug } from "@features/items/items-model.ts"
 import type { RestaurantForm as RestaurantFormState } from "@features/restaurants/restaurants.ts";
+import type { TxStatus } from "@/shared/chain/contracts/index.ts";
 
 import { DANGER_BTN_STYLE } from "@features/items/components/items-styles.ts";
+import { RestaurantContactFields } from "@features/restaurants/components/RestaurantContactFields.tsx";
 
 export type { RestaurantFormState };
 
@@ -29,6 +31,8 @@ export interface RestaurantFormProps {
   form: RestaurantFormState;
   setForm: (next: RestaurantFormState) => void;
   error: string | null;
+  busy?: boolean;
+  txStatus?: TxStatus | null;
   cancelLabel?: string;
   onBack: () => void;
   onSubmit: () => void;
@@ -40,6 +44,8 @@ export function RestaurantForm({
   form,
   setForm,
   error,
+  busy = false,
+  txStatus = null,
   cancelLabel,
   onBack,
   onSubmit,
@@ -47,8 +53,12 @@ export function RestaurantForm({
 }: RestaurantFormProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const isNew = mode === "new";
-  const disabled = form.name.trim() === "" || form.id.trim() === "";
-  const submitLabel = isNew ? "Create restaurant" : "Save changes";
+  const disabled =
+    busy ||
+    form.name.trim() === "" ||
+    form.id.trim() === "" ||
+    form.merchantId.trim() === "";
+  const submitLabel = busy ? "Publishing…" : isNew ? "Create restaurant" : "Save changes";
 
   return (
     <>
@@ -98,7 +108,7 @@ export function RestaurantForm({
         {isNew ? (
           <AInput
             value={form.id}
-            onChange={(v) => setForm({ ...form, id: slugify(v) })}
+            onChange={(v) => setForm({ ...form, id: normalizeSlug(v) })}
             placeholder="funkhaus-berlin"
             mono
           />
@@ -128,36 +138,18 @@ export function RestaurantForm({
           placeholder="Funkhaus Berlin Events GmbH"
         />
       </AField>
-      <AField label="Address line 1">
+      <AField
+        label="Merchant ID"
+        hint="Merchant code embedded in the payment-processor config profile — distinct from the restaurant ID (group)."
+      >
         <AInput
-          value={form.addressLine1}
-          onChange={(v) => setForm({ ...form, addressLine1: v })}
-          placeholder="Nalepastraße 18"
+          value={form.merchantId}
+          onChange={(v) => setForm({ ...form, merchantId: v })}
+          placeholder="funkhaus"
+          mono
         />
       </AField>
-      <AField label="Address line 2">
-        <AInput
-          value={form.addressLine2}
-          onChange={(v) => setForm({ ...form, addressLine2: v })}
-          placeholder="12459 Berlin"
-        />
-      </AField>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <AField label="Phone">
-          <AInput
-            value={form.phone}
-            onChange={(v) => setForm({ ...form, phone: v })}
-            placeholder="030/12085416"
-          />
-        </AField>
-        <AField label="Tax / VAT ID">
-          <AInput
-            value={form.taxId}
-            onChange={(v) => setForm({ ...form, taxId: v })}
-            placeholder="DE263789123"
-          />
-        </AField>
-      </div>
+      <RestaurantContactFields form={form} setForm={setForm} />
 
       <ADotted margin={6} />
 
@@ -177,8 +169,8 @@ export function RestaurantForm({
           <Icon name="info" size={14} />
         </span>
         <div style={{ fontSize: 12, color: COLOR.text2, lineHeight: 1.5 }}>
-          Restaurant profiles never hit chain — they live on this admin
-          device only and ride into the QR each time you regenerate one.
+          Saved on-chain to the registry as a merchant profile, and embedded
+          inline into each T3rminal QR you regenerate.
         </div>
       </div>
 
@@ -202,6 +194,11 @@ export function RestaurantForm({
       <APrimary onClick={onSubmit} disabled={disabled}>
         {submitLabel}
       </APrimary>
+      {busy && txStatus ? (
+        <div style={{ marginTop: 10, fontSize: 12, color: COLOR.muted }}>
+          {txStatus}…
+        </div>
+      ) : null}
 
       {!isNew && onDelete ? (
         <>

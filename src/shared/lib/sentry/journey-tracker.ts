@@ -52,6 +52,7 @@ export class JourneyTracker<T extends string> {
   start(name: T, attributes?: AttrInput): void {
     if (this.active.has(name)) return;
     const merged = this.mergeAttrs(attributes);
+    
     const rootSpan = Sentry.startInactiveSpan({
       name,
       op: this.ops[name],

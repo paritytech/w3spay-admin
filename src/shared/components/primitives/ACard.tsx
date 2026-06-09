@@ -39,7 +39,7 @@ export function ACard({ children, onClick, padding = 14, style }: ACardProps) {
         interactive
           ? (e) => {
               const el = e.currentTarget;
-              el.style.borderColor = COLOR.border;
+              el.style.borderColor = style?.borderColor ?? COLOR.border;
               el.style.background = COLOR.surface;
             }
           : undefined

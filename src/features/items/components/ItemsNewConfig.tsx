@@ -11,7 +11,7 @@ import {
   APrimary,
 } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
-import { slugify } from "@features/items/items-model.ts";
+import { normalizeSlug } from "@features/items/items-model.ts"
 
 export interface NewConfigForm {
   name: string;
@@ -69,7 +69,7 @@ export function ItemsNewConfig({ form, setForm, error, busy, onBack, onSubmit }:
       >
         <AInput
           value={form.id}
-          onChange={(v) => setForm({ ...form, id: slugify(v) })}
+          onChange={(v) => setForm({ ...form, id: normalizeSlug(v) })}
           placeholder="bar"
           mono
         />

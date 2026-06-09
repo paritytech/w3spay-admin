@@ -7,7 +7,7 @@ import { envConfig } from "@/config";
 import { useMainClient } from "@shared/chain/use-client.ts";
 import { withTimeout } from "@shared/utils/with-timeout.ts";
 import { normalizeH160Address } from "@shared/lib/address.ts";
-import { W3SPayMerchantRegistryABI } from "@shared/chain/registry-abi.ts";
+import { W3SPayRegistryABI } from "@shared/chain/registry-abi.ts";
 
 const CHECK_TIMEOUT_MS = 60_000;
 
@@ -38,7 +38,7 @@ export async function checkIsAdmin(
   const [granted] = await withTimeout(
     readContract<[boolean]>(useMainClient().client, {
       address: registryAddress.toLowerCase() as `0x${string}`,
-      abi: W3SPayMerchantRegistryABI,
+      abi: W3SPayRegistryABI,
       functionName: "isAdmin",
       args: [normalizeH160Address(adminH160)],
       origin: envConfig.chain.readOnlyOrigin,

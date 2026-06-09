@@ -3,23 +3,29 @@
 
 import type { MerchantProfile } from "@/shared/lib/config-qr";
 
-export const RESTAURANTS_KEY = "restaurants/v1" as const;
-
-export const LEGACY_MERCHANT_PROFILES_KEY = "merchant-profiles/v1" as const;
-
+/**
+ * A restaurant is the user-facing label for an on-chain `MerchantProfile`
+ * (a group-level merchant identity), keyed by `id == groupId`. The profile's
+ * display fields (name, address, phone, tax id) ride inline into each T3rminal
+ * QR; `merchantId` is the separate merchant code embedded in a published
+ * payment-processor config's `profile` (e.g. group `funkhaus-zola` →
+ * merchantName `Zola`, merchantId `funkhaus`).
+ *
+ * Source of truth is the registry contract (`getAllMerchantProfileIds` +
+ * `getMerchantProfile`) — see `contracts/restaurant-queries.ts`. There is no
+ * local KV: every admin device converges on what's published on-chain.
+ */
 export interface Restaurant {
   readonly id: string;
+  /** Merchant code (e.g. "funkhaus") — distinct from `id`/groupId (e.g. "funkhaus-zola"). */
+  readonly merchantId: string;
   readonly profile: MerchantProfile;
-}
-
-export interface RestaurantsPayloadV1 {
-  readonly version: 1;
-  readonly restaurants: Record<string, MerchantProfile>;
 }
 
 export interface RestaurantForm {
   readonly id: string;
   readonly name: string;
+  readonly merchantId: string;
   readonly addressLine1: string;
   readonly addressLine2: string;
   readonly phone: string;
@@ -29,6 +35,7 @@ export interface RestaurantForm {
 export const EMPTY_RESTAURANT_FORM: RestaurantForm = {
   id: "",
   name: "",
+  merchantId: "",
   addressLine1: "",
   addressLine2: "",
   phone: "",
@@ -41,6 +48,7 @@ export function restaurantToForm(restaurant: Restaurant | null | undefined): Res
   return {
     id: restaurant.id,
     name: p.name,
+    merchantId: restaurant.merchantId,
     addressLine1: p.addressLine1 ?? "",
     addressLine2: p.addressLine2 ?? "",
     phone: p.phone ?? "",
@@ -48,10 +56,16 @@ export function restaurantToForm(restaurant: Restaurant | null | undefined): Res
   };
 }
 
+/**
+ * Build a `Restaurant` from form input, or `null` when a required field
+ * (`id`, `name`, `merchantId`) is blank. Optional profile fields are omitted
+ * when empty so the encoded payload stays minimal.
+ */
 export function formToRestaurant(form: RestaurantForm): Restaurant | null {
   const id = form.id.trim();
   const name = form.name.trim();
-  if (id.length === 0 || name.length === 0) return null;
+  const merchantId = form.merchantId.trim();
+  if (id.length === 0 || name.length === 0 || merchantId.length === 0) return null;
   const profile: {
     name: string;
     addressLine1?: string;
@@ -67,76 +81,14 @@ export function formToRestaurant(form: RestaurantForm): Restaurant | null {
   if (phone.length > 0) profile.phone = phone;
   const taxId = form.taxId.trim();
   if (taxId.length > 0) profile.taxId = taxId;
-  return { id, profile };
-}
-
-export function encodeRestaurantsPayload(
-  restaurants: ReadonlyMap<string, Restaurant>,
-): RestaurantsPayloadV1 {
-  const out: Record<string, MerchantProfile> = {};
-  for (const [id, r] of restaurants) out[id] = r.profile;
-  return { version: 1, restaurants: out };
-}
-
-/**
- * Defensively decode a stored payload. Returns an empty map on any
- * shape mismatch (no throw) so a corrupted KV entry doesn't lock the
- * UI in a broken state — operators just re-enter the restaurant.
- */
-export function decodeRestaurantsPayload(raw: unknown): Map<string, Restaurant> {
-  if (raw == null || typeof raw !== "object") return new Map();
-  const obj = raw as { version?: unknown; restaurants?: unknown };
-  if (obj.version !== 1 || obj.restaurants == null || typeof obj.restaurants !== "object") {
-    return new Map();
-  }
-  return profilesRecordToRestaurants(obj.restaurants as Record<string, unknown>);
-}
-
-export function decodeLegacyMerchantProfilesPayload(raw: unknown): Map<string, Restaurant> {
-  if (raw == null || typeof raw !== "object") return new Map();
-  const obj = raw as { version?: unknown; profiles?: unknown };
-  if (obj.version !== 1 || obj.profiles == null || typeof obj.profiles !== "object") {
-    return new Map();
-  }
-  return profilesRecordToRestaurants(obj.profiles as Record<string, unknown>);
-}
-
-function profilesRecordToRestaurants(
-  profiles: Record<string, unknown>,
-): Map<string, Restaurant> {
-  const out = new Map<string, Restaurant>();
-  for (const [id, value] of Object.entries(profiles)) {
-    if (id.length === 0) continue;
-    const profile = decodeMerchantProfile(value);
-    if (profile) out.set(id, { id, profile });
-  }
-  return out;
-}
-
-function decodeMerchantProfile(value: unknown): MerchantProfile | null {
-  if (value == null || typeof value !== "object") return null;
-  const r = value as Partial<MerchantProfile>;
-  if (typeof r.name !== "string" || r.name.length === 0) return null;
-  const out: {
-    name: string;
-    addressLine1?: string;
-    addressLine2?: string;
-    phone?: string;
-    taxId?: string;
-  } = { name: r.name };
-  if (typeof r.addressLine1 === "string") out.addressLine1 = r.addressLine1;
-  if (typeof r.addressLine2 === "string") out.addressLine2 = r.addressLine2;
-  if (typeof r.phone === "string") out.phone = r.phone;
-  if (typeof r.taxId === "string") out.taxId = r.taxId;
-  return out;
+  return { id, merchantId, profile };
 }
 
 export interface UseRestaurantsResult {
   readonly restaurants: ReadonlyMap<string, Restaurant>;
+  /** False while the first registry read is in flight. */
   readonly hydrated: boolean;
   getRestaurant(id: string): Restaurant | null;
-  upsertRestaurant(restaurant: Restaurant): void;
-  removeRestaurant(id: string): void;
 }
 
 let pendingPickedRestaurant: { merchantKey: string; restaurantId: string } | null = null;

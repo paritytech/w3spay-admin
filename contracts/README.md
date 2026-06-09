@@ -7,9 +7,9 @@ identity to a canonical `bytes32 destinationAccountId`, optional
 Admins manage entries through the Hardhat CLI scripts in this directory.
 
 - Chain: Paseo Next V2 Asset Hub by default (`paseo-next-v2`), pallet-revive.
-- Contract source: `src/W3SPayMerchantRegistry.sol`.
-- Interface: `src/interfaces/IW3SPayMerchantRegistry.sol`.
-- Tests: `test/W3SPayMerchantRegistry.test.ts` (in-memory hardhat network — no Paseo connection needed).
+- Contract source: `src/W3SPayRegistry.sol`.
+- Interface: `src/interfaces/IW3SPayRegistry.sol`.
+- Tests: `test/W3SPayRegistry.test.ts` (in-memory hardhat network — no Paseo connection needed).
 - Deployment: `scripts/deploy-registry.ts` (`Revive.instantiate_with_code` through PAPI).
 
 This package has its own `node_modules/` and `package-lock.json`. Bootstrap it:
@@ -262,7 +262,7 @@ npx hardhat console --network paseoAssetHub
 ```
 
 ```js
-> const Registry = await ethers.getContractAt("W3SPayMerchantRegistry", process.env.W3SPAY_REGISTRY_ADDRESS)
+> const Registry = await ethers.getContractAt("W3SPayRegistry", process.env.W3SPAY_REGISTRY_ADDRESS)
 > const feeData = await ethers.provider.getFeeData()
 > const gasPrice = feeData.gasPrice ? feeData.gasPrice * 10n : 10_000_000_000_000n
 > await Registry.transferOwnership("0xNewOwner", { gasPrice, gasLimit: 500000n })
@@ -378,12 +378,12 @@ PAPI maintenance scripts against `hardhat node`.
 ```text
 contracts/
 ├── src/
-│   ├── W3SPayMerchantRegistry.sol          contract implementation
-│   └── interfaces/IW3SPayMerchantRegistry.sol
+│   ├── W3SPayRegistry.sol          contract implementation
+│   └── interfaces/IW3SPayRegistry.sol
 ├── test/
-│   └── W3SPayMerchantRegistry.test.ts      hardhat-toolbox cases
+│   └── W3SPayRegistry.test.ts      hardhat-toolbox cases
 ├── ignition/modules/
-│   └── W3SPayMerchantRegistry.ts           legacy Ignition module, not the default deploy path
+│   └── W3SPayRegistry.ts           legacy Ignition module, not the default deploy path
 ├── scripts/
 │   ├── deploy-registry.ts                  PAPI pallet-revive deployment
 │   ├── lib/

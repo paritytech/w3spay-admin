@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ethers } from "ethers";
 import { Binary } from "polkadot-api";
 
-import { W3SPayMerchantRegistryABI } from "@shared/chain/registry-abi.ts";
+import { W3SPayRegistryABI } from "@shared/chain/registry-abi.ts";
 import { listMerchantEntries } from "@features/merchant/contracts/list-merchant-entries.ts";
 import { envConfig } from "@/config";
 
@@ -28,7 +28,7 @@ vi.mock("@shared/chain/use-client.ts", () => ({
   resetMainClient: vi.fn(),
 }));
 
-const iface = new ethers.Interface(W3SPayMerchantRegistryABI);
+const iface = new ethers.Interface(W3SPayRegistryABI);
 
 const REGISTRY = ("0x" + "ab".repeat(20)) as `0x${string}`;
 

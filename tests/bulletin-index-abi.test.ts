@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { ethers } from "ethers";
 
 import { T3rminalBulletinIndexABI } from "@features/reports/contracts/bulletin-index-abi.ts";
-import { W3SPayMerchantRegistryABI } from "@shared/chain/registry-abi.ts";
+import { W3SPayRegistryABI } from "@shared/chain/registry-abi.ts";
 
 const iface = new ethers.Interface(T3rminalBulletinIndexABI);
-const registryIface = new ethers.Interface(W3SPayMerchantRegistryABI);
+const registryIface = new ethers.Interface(W3SPayRegistryABI);
 
 const SHOPKEY = ("0x" + "ab".repeat(32)) as `0x${string}`;
 const DATE = "2026-05-26";
@@ -79,7 +79,7 @@ describe("T3rminalBulletinIndexABI encode/decode round-trips", () => {
   });
 });
 
-describe("T3rminalBulletinIndexABI vs W3SPayMerchantRegistryABI selector collision", () => {
+describe("T3rminalBulletinIndexABI vs W3SPayRegistryABI selector collision", () => {
   const bulletinNames = ["getAllDates", "getMetadata", "getCID", "getReportCount"] as const;
 
   it("each bulletin selector is distinct", () => {

@@ -2,20 +2,17 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   EMPTY_RESTAURANT_FORM,
-  decodeLegacyMerchantProfilesPayload,
-  decodeRestaurantsPayload,
-  encodeRestaurantsPayload,
   formToRestaurant,
   restaurantPickerHint,
   restaurantToForm,
   type Restaurant,
   type RestaurantForm,
 } from "@features/restaurants/restaurants.ts";
-import type { MerchantProfile } from "@shared/lib/config-qr";
 
 const FULL_FORM: RestaurantForm = {
-  id: "funkhaus",
-  name: "Funkhaus Berlin Events GmbH",
+  id: "funkhaus-zola",
+  name: "Zola",
+  merchantId: "funkhaus",
   addressLine1: "Nalepastra\u00dfe 18",
   addressLine2: "12459 Berlin",
   phone: "030/12085416",
@@ -27,13 +24,15 @@ describe("formToRestaurant", () => {
     expect(
       formToRestaurant({
         ...FULL_FORM,
-        id: "  funkhaus  ",
-        name: "  Funkhaus Berlin Events GmbH  ",
+        id: "  funkhaus-zola  ",
+        name: "  Zola  ",
+        merchantId: "  funkhaus  ",
       }),
     ).toEqual({
-      id: "funkhaus",
+      id: "funkhaus-zola",
+      merchantId: "funkhaus",
       profile: {
-        name: "Funkhaus Berlin Events GmbH",
+        name: "Zola",
         addressLine1: "Nalepastra\u00dfe 18",
         addressLine2: "12459 Berlin",
         phone: "030/12085416",
@@ -47,12 +46,13 @@ describe("formToRestaurant", () => {
       formToRestaurant({
         id: "solo",
         name: "Solo Bar",
+        merchantId: "solo-m",
         addressLine1: "   ",
         addressLine2: "",
         phone: "  030/1  ",
         taxId: "",
       }),
-    ).toEqual({ id: "solo", profile: { name: "Solo Bar", phone: "030/1" } });
+    ).toEqual({ id: "solo", merchantId: "solo-m", profile: { name: "Solo Bar", phone: "030/1" } });
   });
 
   it("returns null when id is blank", () => {
@@ -64,6 +64,11 @@ describe("formToRestaurant", () => {
     expect(formToRestaurant(EMPTY_RESTAURANT_FORM)).toBeNull();
     expect(formToRestaurant({ ...FULL_FORM, name: "   " })).toBeNull();
   });
+
+  it("returns null when merchantId is blank", () => {
+    expect(formToRestaurant({ ...FULL_FORM, merchantId: "" })).toBeNull();
+    expect(formToRestaurant({ ...FULL_FORM, merchantId: "   " })).toBeNull();
+  });
 });
 
 describe("restaurantToForm", () => {
@@ -74,10 +79,15 @@ describe("restaurantToForm", () => {
 
   it("blank-fills absent optional fields so inputs stay controlled", () => {
     expect(
-      restaurantToForm({ id: "solo", profile: { name: "Solo Bar", phone: "030/1" } }),
+      restaurantToForm({
+        id: "solo",
+        merchantId: "solo-m",
+        profile: { name: "Solo Bar", phone: "030/1" },
+      }),
     ).toEqual({
       id: "solo",
       name: "Solo Bar",
+      merchantId: "solo-m",
       addressLine1: "",
       addressLine2: "",
       phone: "030/1",
@@ -86,78 +96,12 @@ describe("restaurantToForm", () => {
   });
 
   it("round-trips a wire restaurant through form and back", () => {
-    const wire: Restaurant = { id: "solo", profile: { name: "Solo Bar", taxId: "DE1" } };
+    const wire: Restaurant = {
+      id: "solo",
+      merchantId: "solo-m",
+      profile: { name: "Solo Bar", taxId: "DE1" },
+    };
     expect(formToRestaurant(restaurantToForm(wire))).toEqual(wire);
-  });
-});
-
-describe("encode / decodeRestaurantsPayload", () => {
-  it("round-trips a keyed map of restaurants", () => {
-    const restaurants = new Map<string, Restaurant>([
-      [
-        "funkhaus",
-        { id: "funkhaus", profile: { name: "Funkhaus Berlin Events GmbH", addressLine1: "Nalepastra\u00dfe 18" } },
-      ],
-      ["sisyphos", { id: "sisyphos", profile: { name: "Sisyphos" } }],
-    ]);
-    const decoded = decodeRestaurantsPayload(encodeRestaurantsPayload(restaurants));
-    expect(decoded).toEqual(restaurants);
-  });
-
-  it("returns an empty map for corrupt or wrong-version payloads", () => {
-    expect(decodeRestaurantsPayload(null).size).toBe(0);
-    expect(decodeRestaurantsPayload("nope").size).toBe(0);
-    expect(decodeRestaurantsPayload({ version: 2, restaurants: {} }).size).toBe(0);
-    expect(decodeRestaurantsPayload({ version: 1 }).size).toBe(0);
-  });
-
-  it("drops individual entries that are missing a name", () => {
-    const decoded = decodeRestaurantsPayload({
-      version: 1,
-      restaurants: {
-        ok: { name: "Funkhaus" },
-        broken: { addressLine1: "no name here" },
-        alsoBroken: { name: "" },
-        "": { name: "blank-id-also-rejected" },
-      },
-    });
-    expect([...decoded.keys()]).toEqual(["ok"]);
-    expect(decoded.get("ok")).toEqual({ id: "ok", profile: { name: "Funkhaus" } });
-  });
-
-  it("ignores non-string optional fields when decoding", () => {
-    const decoded = decodeRestaurantsPayload({
-      version: 1,
-      restaurants: { ok: { name: "Funkhaus", phone: 49, taxId: "DE1" } },
-    });
-    expect(decoded.get("ok")).toEqual({
-      id: "ok",
-      profile: { name: "Funkhaus", taxId: "DE1" },
-    });
-  });
-});
-
-describe("decodeLegacyMerchantProfilesPayload", () => {
-  it("folds pre-rename merchant-profiles/v1 payloads into Restaurant map keyed by merchantId", () => {
-    const legacy = {
-      version: 1,
-      profiles: {
-        funkhaus: { name: "Funkhaus Berlin Events GmbH", addressLine1: "Nalepastra\u00dfe 18" },
-        sisyphos: { name: "Sisyphos" },
-      },
-    } satisfies { version: 1; profiles: Record<string, MerchantProfile> };
-    const decoded = decodeLegacyMerchantProfilesPayload(legacy);
-    expect(decoded.get("funkhaus")).toEqual({
-      id: "funkhaus",
-      profile: { name: "Funkhaus Berlin Events GmbH", addressLine1: "Nalepastra\u00dfe 18" },
-    });
-    expect(decoded.get("sisyphos")).toEqual({ id: "sisyphos", profile: { name: "Sisyphos" } });
-  });
-
-  it("returns an empty map for missing / malformed legacy payloads", () => {
-    expect(decodeLegacyMerchantProfilesPayload(null).size).toBe(0);
-    expect(decodeLegacyMerchantProfilesPayload({ version: 2, profiles: {} }).size).toBe(0);
-    expect(decodeLegacyMerchantProfilesPayload({ version: 1 }).size).toBe(0);
   });
 });
 

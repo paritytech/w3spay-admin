@@ -13,7 +13,7 @@ import {
   ASecondary,
 } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
-import { slugify } from "@features/items/items-model.ts";
+import { normalizeSlug } from "@features/items/items-model.ts"
 import {
   DANGER_BTN_STYLE,
   PRICE_INPUT_STYLE,
@@ -116,7 +116,7 @@ export function ItemsItemForm({
       <AField label="SKU" hint="Stable identifier sent with each receipt. Auto-generated if empty.">
         <AInput
           value={form.id}
-          onChange={(v) => setForm({ ...form, id: slugify(v) })}
+          onChange={(v) => setForm({ ...form, id: normalizeSlug(v) })}
           placeholder="sku-001"
           mono
         />

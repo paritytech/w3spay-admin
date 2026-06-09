@@ -30,6 +30,7 @@ import { MerchantsList } from "@features/merchant/pages/MerchantsList.tsx";
 import { Reports } from "@features/reports/pages/Reports.tsx";
 import { ReportsTerminal } from "@features/reports/pages/ReportsTerminal.tsx";
 import { Restaurants } from "@features/restaurants/pages/Restaurants.tsx";
+import { PaymentProcessors } from "@features/payment-processors/pages/PaymentProcessors.tsx";
 import { useSessionStore } from "@features/session/store/use-session-store.ts";
 
 const rootRoute = createRootRoute({ component: RootLayout });
@@ -187,6 +188,30 @@ const restaurantsEditRoute = createRoute({
   },
 });
 
+const paymentProcessorsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/payment-processors",
+  staticData: { tab: "payment-processors", showTabs: true },
+  component: () => <PaymentProcessors view={{ kind: "list" }} />,
+});
+
+const paymentProcessorsNewRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/payment-processors/new",
+  staticData: { tab: "payment-processors", showTabs: true },
+  component: () => <PaymentProcessors view={{ kind: "new" }} />,
+});
+
+const paymentProcessorsEditRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: "/payment-processors/$groupId",
+  staticData: { tab: "payment-processors", showTabs: true },
+  component: function PaymentProcessorsEditRoute() {
+    const { groupId } = paymentProcessorsEditRoute.useParams();
+    return <PaymentProcessors view={{ kind: "edit", groupId }} />;
+  },
+});
+
 const balancesRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/balances",
@@ -218,7 +243,12 @@ const accountRoute = createRoute({
   component: function AccountRoute() {
     const readyAccount = useSessionStore((s) => s.readyAccount);
     if (readyAccount == null) return null;
-    return <AdminAccountCard identity={readyAccount} title="Signed-in admin account" />;
+    return (
+      <>
+        <AdminAccountCard identity={readyAccount} title="Signed-in admin account" />
+  
+      </>
+    );
   },
 });
 
@@ -240,6 +270,9 @@ const routeTree = rootRoute.addChildren([
     restaurantsRoute,
     restaurantsNewRoute,
     restaurantsEditRoute,
+    paymentProcessorsRoute,
+    paymentProcessorsNewRoute,
+    paymentProcessorsEditRoute,
     balancesRoute,
     reportsRoute,
     reportsTerminalRoute,
