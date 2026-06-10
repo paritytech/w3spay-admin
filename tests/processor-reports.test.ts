@@ -118,11 +118,12 @@ const DOC: ProcessorReportDoc = {
   grandTotalPlanck: "3000",
   count: 2,
   payments: [
-    { paymentId: "p1", terminalId: "t1", amountPlanck: "1000", blockNumber: 5, observedAtMs: 50 },
+    { paymentId: "p1", terminalId: "t1", amountPlanck: "1000", amount: "0.001", blockNumber: 5, observedAtMs: 50 },
     {
       paymentId: "p2",
       terminalId: "t1",
       amountPlanck: "2000",
+      amount: "0.002",
       blockNumber: 9,
       observedAtMs: 90,
       fromHex: `0x${"b".repeat(64)}`,
@@ -163,8 +164,19 @@ describe("parseProcessorReportDoc", () => {
     const coin = { paymentId: "c-1", terminalId: "tap-1", amountPlanck: "500", observedAtMs: 7 };
     const doc = { ...DOC, payments: [coin, { ...coin, paymentId: "c-2", blockNumber: "120" }] };
     const parsed = parseProcessorReportDoc(doc, "group-1");
-    expect(parsed?.payments).toEqual([coin]);
+    expect(parsed?.payments).toEqual([{ ...coin, amount: "0.0005" }]);
     expect(parsed != null && "blockNumber" in parsed.payments[0]!).toBe(false);
+  });
+
+  it("computes the human amount from planck when the wire omits it (legacy reports)", () => {
+    const { amount: _omit, ...legacy } = DOC.payments[0]!;
+    const parsed = parseProcessorReportDoc({ ...DOC, payments: [legacy] }, "group-1");
+    expect(parsed?.payments[0]?.amount).toBe("0.001");
+  });
+
+  it("prefers the producer-emitted amount over recomputing from planck", () => {
+    const tweaked = { ...DOC, payments: [{ ...DOC.payments[0], amount: "9.999" }] };
+    expect(parseProcessorReportDoc(tweaked, "group-1")?.payments[0]?.amount).toBe("9.999");
   });
 
   it("omits the seq key for X docs that carry none", () => {
@@ -272,7 +284,7 @@ describe("processorReportToCsv", () => {
   it("leaves the block cell empty for coin payments", () => {
     const doc: ProcessorReportDoc = {
       ...DOC,
-      payments: [{ paymentId: "c-1", terminalId: "tap-1", amountPlanck: "500000", observedAtMs: 9 }],
+      payments: [{ paymentId: "c-1", terminalId: "tap-1", amountPlanck: "500000", amount: "0.5", observedAtMs: 9 }],
     };
     expect(processorReportToCsv(doc).split("\n")[1]).toBe(
       `c-1,tap-1,0.5,CASH,500000,,${new Date(9).toISOString()},`,

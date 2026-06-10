@@ -9,4 +9,4 @@ entry = "index.html"
 sandbox = "strict"
 
 [extensions]
-use_extensions = ["host.data", "host.browser.bridge", "host.api"]
+use_extensions = ["host.data", "host.browser.bridge", "host.api", "host.media"]

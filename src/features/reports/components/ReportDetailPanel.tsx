@@ -22,7 +22,7 @@ import {
   ASecondary,
 } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
-import { saveFile } from "@shared/utils/download.ts";
+import { exportFile } from "@shared/utils/export-file.ts";
 
 export interface ReportDetailPanelProps {
   readonly entry: ReportIndexEntry;
@@ -342,7 +342,7 @@ function TransactionCard({ tx }: { tx: DailyReportTransaction }) {
 }
 
 function downloadReportJson(date: string, report: DailyReport): void {
-  void saveFile({
+  void exportFile({
     fileName: `daily-report-${date}.json`,
     content: JSON.stringify(report, null, 2),
     mimeType: "application/json",

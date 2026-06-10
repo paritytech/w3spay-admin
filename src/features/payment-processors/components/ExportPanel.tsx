@@ -4,7 +4,7 @@
 import { ACard, ASecondary } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
 import { useFeedbackStore } from "@shared/store/use-feedback-store.ts";
-import { saveFile } from "@shared/utils/download.ts";
+import { exportFile } from "@shared/utils/export-file.ts";
 
 /** Remote-config JSON for the current form: terminalId → `{ topic, key, name }`. */
 export function ExportPanel({ json, fileName }: { json: string; fileName: string }) {
@@ -17,7 +17,7 @@ export function ExportPanel({ json, fileName }: { json: string; fileName: string
         <div style={{ display: "flex", gap: 8 }}>
           <ASecondary
             full={false}
-            onClick={() => void saveFile({ fileName, content: json, mimeType: "application/json" })}
+            onClick={() => void exportFile({ fileName, content: json, mimeType: "application/json" })}
           >
             Save JSON
           </ASecondary>

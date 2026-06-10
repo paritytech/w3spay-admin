@@ -26,11 +26,14 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    sentryVitePlugin({
-      org: "paritytech",
-      project: "w3spay",
-      telemetry: true,
-    }),
+    // Sentry source-map upload is an explicit release-engineering opt-in:
+    // without VITE_W3SPAY_SENTRY_ENABLED=true the plugin is never even loaded, so a plain
+    // dev/test/build makes NO Sentry calls (no plugin phone-home telemetry,
+    // no release creation, no .env.sentry-build-plugin upload). Runtime app
+    // events are governed separately by the kill switch in src/config.ts.
+    ...(process.env.VITE_W3SPAY_SENTRY_ENABLED === "true"
+      ? [sentryVitePlugin({ org: "paritytech", project: "w3spay", telemetry: false })]
+      : []),
   ],
   resolve: {
     alias: {

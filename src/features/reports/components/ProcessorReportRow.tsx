@@ -19,7 +19,8 @@ import {
   type ProcessorReportDoc,
 } from "@features/reports/processor-report.ts";
 import { ACard, AMono, ASecondary } from "@shared/components/primitives.tsx";
-import { saveFile } from "@shared/utils/download.ts";
+import { exportFile } from "@shared/utils/export-file.ts";
+import { useFeedbackStore } from "@shared/store/use-feedback-store.ts";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
 
 export interface ProcessorReportRowProps {
@@ -164,6 +165,9 @@ function ReadyBody({
   entry: ProcessorReportIndexEntry;
   gatewayBase: string;
 }) {
+  const copyValue = useFeedbackStore((s) => s.copyValue);
+  const csvCopyLabel = `csv:${doc.groupId}:${doc.seq}`;
+  const csvCopied = useFeedbackStore((s) => s.copiedField) === csvCopyLabel;
   return (
     <>
       <div style={{ paddingTop: 12, fontSize: 11, color: COLOR.muted }}>
@@ -241,13 +245,19 @@ function ReadyBody({
         <ASecondary full={false} onClick={() => downloadProcessorReportCsv(doc)}>
           Download CSV
         </ASecondary>
+        <ASecondary
+          full={false}
+          onClick={() => copyValue(processorReportToCsv(doc), csvCopyLabel)}
+        >
+          {csvCopied ? "Copied" : "Copy CSV"}
+        </ASecondary>
       </div>
     </>
   );
 }
 
 function downloadProcessorReportCsv(doc: ProcessorReportDoc): void {
-  void saveFile({
+  void exportFile({
     fileName: `w3spay-z-report-${doc.groupId}-${String(doc.seq).padStart(4, "0")}.csv`,
     content: processorReportToCsv(doc),
     mimeType: "text/csv",

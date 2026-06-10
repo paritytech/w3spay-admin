@@ -22,6 +22,8 @@ export interface ReportPayment {
   readonly paymentId: string;
   readonly terminalId: string;
   readonly amountPlanck: string;
+  /** Human-readable token amount (no symbol). Producer-emitted; computed from `amountPlanck` for older reports. */
+  readonly amount: string;
   readonly blockNumber?: number;
   readonly observedAtMs: number;
   readonly fromHex?: string;
@@ -64,7 +66,7 @@ function parseLine(raw: unknown): ReportLine | null {
   };
 }
 
-function parsePayment(raw: unknown): ReportPayment | null {
+function parsePayment(raw: unknown, decimals: number): ReportPayment | null {
   if (!isRecord(raw)) return null;
   if (typeof raw.paymentId !== "string") return null;
   if (typeof raw.terminalId !== "string") return null;
@@ -75,6 +77,7 @@ function parsePayment(raw: unknown): ReportPayment | null {
     paymentId: raw.paymentId,
     terminalId: raw.terminalId,
     amountPlanck: raw.amountPlanck,
+    amount: typeof raw.amount === "string" ? raw.amount : planckToDecimal(raw.amountPlanck, decimals),
     ...(typeof raw.blockNumber === "number" ? { blockNumber: raw.blockNumber } : {}),
     observedAtMs: raw.observedAtMs,
     ...(typeof raw.fromHex === "string" ? { fromHex: raw.fromHex } : {}),
@@ -114,7 +117,7 @@ export function parseProcessorReportDoc(
   const payments: ReportPayment[] = [];
   if (Array.isArray(raw.payments)) {
     for (const entry of raw.payments) {
-      const payment = parsePayment(entry);
+      const payment = parsePayment(entry, raw.token.decimals);
       if (payment != null) payments.push(payment);
     }
   }
@@ -191,7 +194,7 @@ export function processorReportToCsv(doc: ProcessorReportDoc): string {
     [
       p.paymentId,
       p.terminalId,
-      planckToDecimal(p.amountPlanck, doc.token.decimals),
+      p.amount,
       doc.token.symbol,
       p.amountPlanck,
       p.blockNumber != null ? String(p.blockNumber) : "",

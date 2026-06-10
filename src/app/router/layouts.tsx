@@ -13,6 +13,7 @@ import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
 import { useGateVerdict } from "./guards.tsx";
 import { DemoModeBanner } from "@shared/components/DemoModeBanner.tsx";
 import { FeedbackToast } from "@shared/components/FeedbackToast.tsx";
+import { ExportFallbackModal } from "@shared/components/ExportFallbackModal.tsx";
 import { AFrame, ARail, ATabs } from "@shared/components/primitives.tsx";
 import { DebugPanel } from "@/shared/chain/host/debug/index.ts";
 import { TABS, TAB_DEFAULT_PATH, type TabId } from "./routes.ts";
@@ -105,6 +106,7 @@ function Shell() {
         </div>
       </AFrame>
       <FeedbackToast />
+      <ExportFallbackModal />
       {envConfig.debug.enabled ? (
         <DebugPanel defaultOpen={envConfig.debug.openByDefault} initialFilter="" />
       ) : null}
