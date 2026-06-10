@@ -41,6 +41,13 @@ export interface ProcessorConfigCacheState {
   hydrate(): Promise<void>;
   getConfig(groupId: string): CachedProcessorConfig | null;
   saveConfig(config: CachedProcessorConfig): void;
+  /**
+   * Drop the per-group cache entry this device has on file. Called when the
+   * registry record is removed (e.g. via `removeProcessorConfig`) so the next
+   * visit to that group's editor forces the passkey gate again instead of
+   * silently re-using stale terminals. No-op if no entry exists.
+   */
+  removeConfig(groupId: string): void;
 }
 
 let hydrating: Promise<void> | null = null;
@@ -140,6 +147,15 @@ export const useProcessorConfigCacheStore = create<ProcessorConfigCacheState>((s
   saveConfig: (config) => {
     const next = new Map(get().configs);
     next.set(config.groupId, config);
+    set({ configs: next });
+    persist(next);
+  },
+
+  removeConfig: (groupId) => {
+    const current = get().configs;
+    if (!current.has(groupId)) return;
+    const next = new Map(current);
+    next.delete(groupId);
     set({ configs: next });
     persist(next);
   },

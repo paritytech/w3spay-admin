@@ -11,6 +11,7 @@ export type AppJourneyType =
   | "w3spay-admin:chain-write"
   | "w3spay-admin:publish-item-configs"
   | "w3spay-admin:publish-processor-config"
+  | "w3spay-admin:delete-processor-config"
   | "w3spay-admin:merchant-table-load";
 
 /** Sentry `op` for each journey's root span. Keep stable — changing them invalidates the dashboard's saved searches. */
@@ -19,6 +20,7 @@ const APP_JOURNEY_OPS: Readonly<Record<AppJourneyType, string>> = {
   "w3spay-admin:chain-write": "journey.w3spay-admin:chain-write",
   "w3spay-admin:publish-item-configs": "journey.w3spay-admin:publish-item-configs",
   "w3spay-admin:publish-processor-config": "journey.w3spay-admin:publish-processor-config",
+  "w3spay-admin:delete-processor-config": "journey.w3spay-admin:delete-processor-config",
   "w3spay-admin:merchant-table-load": "journey.w3spay-admin:merchant-table-load",
 };
 
