@@ -38,6 +38,7 @@ describe("W3SPayRegistry", function () {
     it("seeds owner and owner as admin", async function () {
       expect(await registry.owner()).to.equal(owner.address);
       expect(await registry.isAdmin(owner.address)).to.be.true;
+      expect(await registry.isSuperAdmin(owner.address)).to.be.true;
       expect(await registry.getVersion()).to.equal(0);
       expect(await registry.getMerchantCount()).to.equal(0);
     });
@@ -64,10 +65,10 @@ describe("W3SPayRegistry", function () {
       expect(await registry.isAdmin(admin.address)).to.be.false;
     });
 
-    it("non-owner cannot grant admin", async function () {
+    it("non-super-admin cannot grant admin", async function () {
       await expect(
         registry.connect(outsider).addAdmin(outsider.address)
-      ).to.be.revertedWith("Not owner");
+      ).to.be.revertedWith("Not super admin");
     });
 
     it("owner cannot demote themselves", async function () {
@@ -82,6 +83,125 @@ describe("W3SPayRegistry", function () {
         .withArgs(owner.address, admin.address);
       expect(await registry.owner()).to.equal(admin.address);
       expect(await registry.isAdmin(admin.address)).to.be.true;
+      expect(await registry.isSuperAdmin(admin.address)).to.be.true;
+    });
+  });
+
+  describe("Super admin role", function () {
+    it("addSuperAdmin promotes to both super admin and admin", async function () {
+      const tx = await registry.connect(owner).addSuperAdmin(admin.address);
+      await expect(tx).to.emit(registry, "SuperAdminAdded").withArgs(admin.address);
+      await expect(tx).to.emit(registry, "AdminAdded").withArgs(admin.address);
+      expect(await registry.isSuperAdmin(admin.address)).to.be.true;
+      expect(await registry.isAdmin(admin.address)).to.be.true;
+    });
+
+    it("addSuperAdmin on an existing admin emits only SuperAdminAdded", async function () {
+      await registry.connect(owner).addAdmin(admin.address);
+      const tx = await registry.connect(owner).addSuperAdmin(admin.address);
+      const receipt = await tx.wait();
+      const adminAdded = receipt.logs
+        .map((l) => {
+          try {
+            return registry.interface.parseLog(l);
+          } catch {
+            return null;
+          }
+        })
+        .filter((p) => p && p.name === "AdminAdded");
+      expect(adminAdded.length).to.equal(0);
+      await expect(tx).to.emit(registry, "SuperAdminAdded").withArgs(admin.address);
+    });
+
+    it("a non-owner super admin can manage admins and super admins", async function () {
+      await registry.connect(owner).addSuperAdmin(admin.address);
+
+      await registry.connect(admin).addAdmin(outsider.address);
+      expect(await registry.isAdmin(outsider.address)).to.be.true;
+
+      await registry.connect(admin).removeAdmin(outsider.address);
+      expect(await registry.isAdmin(outsider.address)).to.be.false;
+
+      await registry.connect(admin).bulkAddAdmins([outsider.address]);
+      expect(await registry.isAdmin(outsider.address)).to.be.true;
+
+      await registry.connect(admin).addSuperAdmin(outsider.address);
+      expect(await registry.isSuperAdmin(outsider.address)).to.be.true;
+
+      await registry.connect(admin).removeSuperAdmin(outsider.address);
+      expect(await registry.isSuperAdmin(outsider.address)).to.be.false;
+    });
+
+    it("a normal admin cannot grant admin", async function () {
+      await registry.connect(owner).addAdmin(admin.address);
+      await expect(
+        registry.connect(admin).addAdmin(outsider.address)
+      ).to.be.revertedWith("Not super admin");
+    });
+
+    it("an outsider cannot add a super admin", async function () {
+      await expect(
+        registry.connect(outsider).addSuperAdmin(outsider.address)
+      ).to.be.revertedWith("Not super admin");
+    });
+
+    it("addSuperAdmin rejects the zero address", async function () {
+      await expect(
+        registry.connect(owner).addSuperAdmin(ethers.ZeroAddress)
+      ).to.be.revertedWith("Zero super admin");
+    });
+
+    it("addSuperAdmin rejects a duplicate", async function () {
+      await registry.connect(owner).addSuperAdmin(admin.address);
+      await expect(
+        registry.connect(owner).addSuperAdmin(admin.address)
+      ).to.be.revertedWith("Already super admin");
+    });
+
+    it("removeSuperAdmin cannot demote the owner", async function () {
+      await expect(
+        registry.connect(owner).removeSuperAdmin(owner.address)
+      ).to.be.revertedWith("Cannot demote owner");
+    });
+
+    it("removeSuperAdmin reverts on a non-super-admin target", async function () {
+      await expect(
+        registry.connect(owner).removeSuperAdmin(outsider.address)
+      ).to.be.revertedWith("Not super admin");
+    });
+
+    it("removeSuperAdmin demotes to a normal admin", async function () {
+      await registry.connect(owner).addSuperAdmin(admin.address);
+      await expect(registry.connect(owner).removeSuperAdmin(admin.address))
+        .to.emit(registry, "SuperAdminRemoved")
+        .withArgs(admin.address);
+      expect(await registry.isSuperAdmin(admin.address)).to.be.false;
+      expect(await registry.isAdmin(admin.address)).to.be.true;
+      await registry.connect(admin).registerMerchant("m", "t", DEST_ALPHA, "Display");
+      await expect(
+        registry.connect(admin).addAdmin(outsider.address)
+      ).to.be.revertedWith("Not super admin");
+    });
+
+    it("removeAdmin refuses while the target is still a super admin", async function () {
+      await registry.connect(owner).addSuperAdmin(admin.address);
+      await expect(
+        registry.connect(owner).removeAdmin(admin.address)
+      ).to.be.revertedWith("Demote super admin first");
+      await registry.connect(owner).removeSuperAdmin(admin.address);
+      await expect(registry.connect(owner).removeAdmin(admin.address))
+        .to.emit(registry, "AdminRemoved")
+        .withArgs(admin.address);
+      expect(await registry.isAdmin(admin.address)).to.be.false;
+    });
+
+    it("role mutations leave the version unchanged", async function () {
+      const before = await registry.getVersion();
+      await registry.connect(owner).addSuperAdmin(admin.address);
+      await registry.connect(owner).addAdmin(outsider.address);
+      await registry.connect(owner).removeSuperAdmin(admin.address);
+      await registry.connect(owner).removeAdmin(admin.address);
+      expect(await registry.getVersion()).to.equal(before);
     });
   });
 
@@ -757,10 +877,10 @@ describe("W3SPayRegistry", function () {
       await expect(registry.bulkAddAdmins([ethers.ZeroAddress])).to.be.revertedWith("Zero admin");
     });
 
-    it("non-owner cannot bulk-add", async function () {
+    it("non-super-admin cannot bulk-add", async function () {
       await expect(
         registry.connect(outsider).bulkAddAdmins([outsider.address])
-      ).to.be.revertedWith("Not owner");
+      ).to.be.revertedWith("Not super admin");
     });
 
     it("a bulk-added admin can then upsert a processor config", async function () {

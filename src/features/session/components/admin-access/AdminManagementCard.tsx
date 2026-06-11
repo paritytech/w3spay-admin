@@ -6,21 +6,29 @@ import { useMemo, useState } from "react";
 import type { TxStatus } from "@/shared/chain/contracts/index.ts";
 import type { ReadyAdminAccount } from "@features/session/account.ts";
 import { isH160Address } from "@shared/lib/address.ts";
-import { bulkAddAdmins } from "@shared/chain/admin-writes.ts";
+import { addSuperAdmin, bulkAddAdmins } from "@shared/chain/admin-writes.ts";
 import { useFeedbackStore } from "@shared/store/use-feedback-store.ts";
-import { ACard, AEye, AField, ATextarea, APrimary } from "@shared/components/primitives.tsx";
+import { ACard, AEye, AField, APrimary, ATabs, ATextarea } from "@shared/components/primitives.tsx";
 import { COLOR } from "@shared/components/tokens.ts";
 
 /**
- * Owner-only batch admin grant. Paste one H160 address per line and submit —
- * the registry's `bulkAddAdmins` is idempotent (already-admins are skipped).
- * Non-owners get a friendly message on the contract's `"Not owner"` revert.
+ * Super-admin-only role management. Paste one H160 address per line to grant
+ * normal admin access in bulk, or switch to "Super admins" to promote one
+ * high-privilege account at a time.
  */
+
+type RoleManagementRole = "admin" | "super-admin";
+
+const ROLE_TABS: ReadonlyArray<{ readonly id: RoleManagementRole; readonly label: string }> = [
+  { id: "admin", label: "Admins" },
+  { id: "super-admin", label: "Super admins" },
+];
 export function AdminManagementCard({ account }: { account: ReadyAdminAccount }) {
   const showToast = useFeedbackStore((s) => s.showToast);
   const [text, setText] = useState("");
   const [txStatus, setTxStatus] = useState<TxStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState<RoleManagementRole>("admin");
   const submitting = txStatus != null;
 
   const { valid, invalid } = useMemo(() => {
@@ -52,22 +60,44 @@ export function AdminManagementCard({ account }: { account: ReadyAdminAccount })
       setError("Paste at least one 0x-prefixed H160 admin address.");
       return;
     }
+    if (role === "super-admin" && valid.length !== 1) {
+      setError("Promote one super admin at a time.");
+      return;
+    }
+
     setError(null);
     setTxStatus("preparing");
     try {
-      await bulkAddAdmins({
-        context: { signer: account.signer, walletAddress: account.ss58Address },
-        addresses: valid,
-        onStatus: setTxStatus,
-      });
-      showToast(`Granted admin to ${valid.length} address${valid.length === 1 ? "" : "es"}.`, "ok");
+      const context = { signer: account.signer, walletAddress: account.ss58Address };
+      if (role === "admin") {
+        await bulkAddAdmins({
+          context,
+          addresses: valid,
+          onStatus: setTxStatus,
+        });
+        showToast(
+          `Granted admin to ${valid.length} address${valid.length === 1 ? "" : "es"}.`,
+          "ok",
+        );
+      } else {
+        const address = valid[0];
+        if (address == null) throw new Error("No super admin address provided.");
+        await addSuperAdmin({
+          context,
+          address,
+          onStatus: setTxStatus,
+        });
+        showToast(`Promoted ${address} to super admin.`, "ok");
+      }
       setText("");
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
       setError(
-        /not owner/i.test(message)
-          ? "Only the registry owner can add admins."
-          : message,
+        /not super admin/i.test(message)
+          ? "Only super admins can manage registry roles."
+          : /already super admin/i.test(message)
+            ? "That address is already a super admin."
+            : message,
       );
     } finally {
       setTxStatus(null);
@@ -77,9 +107,12 @@ export function AdminManagementCard({ account }: { account: ReadyAdminAccount })
   return (
     <ACard padding={16}>
       <AEye>Registry admins</AEye>
-      <div style={{ fontSize: 12, color: COLOR.muted, lineHeight: 1.5, margin: "6px 0 12px" }}>
-        Grant admin (write access to the registry) to one or more accounts. One H160 address per line.
-        Owner-only — already-admin entries are skipped.
+      <div style={{ margin: "8px 0 12px" }}>
+        <ATabs value={role} onChange={setRole} items={ROLE_TABS} />
+      </div>
+      <div style={{ fontSize: 12, color: COLOR.muted, lineHeight: 1.5, margin: "0 0 12px" }}>
+        Grant admin (write access) or promote a super admin (can manage admins and super admins).
+        One H160 address per line. Super-admin only — already-granted entries are skipped.
       </div>
       <AField label="Admin addresses (H160, one per line)">
         <ATextarea
@@ -107,10 +140,14 @@ export function AdminManagementCard({ account }: { account: ReadyAdminAccount })
       ) : null}
       <APrimary onClick={onSubmit} disabled={submitting || valid.length === 0}>
         {submitting
-          ? "Granting…"
-          : valid.length > 0
-            ? `Add ${valid.length} admin${valid.length === 1 ? "" : "s"}`
-            : "Add admins"}
+          ? role === "super-admin"
+            ? "Promoting…"
+            : "Granting…"
+          : role === "super-admin"
+            ? "Promote to super admin"
+            : valid.length > 0
+              ? `Add ${valid.length} admin${valid.length === 1 ? "" : "s"}`
+              : "Add admins"}
       </APrimary>
       {submitting && txStatus ? (
         <div style={{ marginTop: 10, fontSize: 12, color: COLOR.muted }}>{txStatus}…</div>

@@ -21,6 +21,7 @@ import {
   type NetworkConfig,
 } from "../../../src/shared/chain/host/networks";
 import { parseEnvSelector } from "./argv";
+import { loadEnvFile } from "../../../scripts/lib/env-files";
 
 export const CONTRACTS_ROOT = resolve(__dirname, "..", "..");
 export const APP_ROOT = resolve(CONTRACTS_ROOT, "..");
@@ -64,25 +65,12 @@ export interface MerchantEntry {
   exists: boolean;
 }
 
-export function loadEnvFile(path: string): void {
-  if (!existsSync(path)) return;
-  const raw = readFileSync(path, "utf8");
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const equals = trimmed.indexOf("=");
-    if (equals <= 0) continue;
-    const key = trimmed.slice(0, equals).trim();
-    if (process.env[key] !== undefined) continue;
-    process.env[key] = trimmed.slice(equals + 1).trim().replace(/^(['"])(.*)\1$/, "$2");
-  }
-}
-
 export function loadDefaultEnv(): void {
-  // app .env.local is where deploy-registry writes VITE_NETWORK + registry.
+  // Single source of truth: the repo-root .env.local (where deploy-registry
+  // writes VITE_NETWORK + the registry address) then .env. Already-set
+  // process.env keys win, so exported shell vars still override the files.
   loadEnvFile(resolve(APP_ROOT, ".env.local"));
-  // contracts/.env holds DEPLOYER_SEED and operator-only values.
-  loadEnvFile(resolve(CONTRACTS_ROOT, ".env"));
+  loadEnvFile(resolve(APP_ROOT, ".env"));
 }
 
 export function parseEnvFlag(argv: string[]): string | undefined {
@@ -125,7 +113,7 @@ export function normalizeH160(raw: string, label = "address"): `0x${string}` {
 }
 
 export function requireRegistryAddress(): `0x${string}` {
-  const value = process.env.VITE_W3SPAY_REGISTRY_ADDRESS || process.env.W3SPAY_REGISTRY_ADDRESS;
+  const value = process.env.W3SPAY_REGISTRY_ADDRESS || process.env.VITE_W3SPAY_REGISTRY_ADDRESS;
   if (!value) {
     throw new Error(
       "Set W3SPAY_REGISTRY_ADDRESS or VITE_W3SPAY_REGISTRY_ADDRESS to the deployed registry address.",
@@ -144,7 +132,7 @@ export function stringify(value: unknown): string {
 
 export function createSigner(): SignerBundle {
   const seed = process.env.DEPLOYER_SEED;
-  if (!seed) throw new Error("DEPLOYER_SEED is not set. Add it to contracts/.env or export it.");
+  if (!seed) throw new Error("DEPLOYER_SEED is not set. Add it to .env.local at the repo root or export it.");
 
   const miniSecret = entropyToMiniSecret(mnemonicToEntropy(seed));
   const derive = sr25519CreateDerive(miniSecret);

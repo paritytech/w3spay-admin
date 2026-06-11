@@ -15,6 +15,7 @@ import {
   type HostEnvironment,
 } from "./connection.ts";
 import { recordBootEvent } from "./debug/debug-store.ts";
+import { createGuardedHostSigner } from "./guarded-signer.ts";
 
 export type WalletPhase = "connect-host" | "get-product-account" | "build-signer";
 
@@ -138,7 +139,9 @@ async function init(opts: ResolvedHostWalletOptions): Promise<void> {
     derivationIndex,
     publicKey: productAccount.publicKey,
   };
-  const signer = provider.getProductAccountSigner(account, "createTransaction");
+  const signer = createGuardedHostSigner(
+    provider.getProductAccountSigner(account, "createTransaction"),
+  );
   recordBootEvent("build-signer", "ok");
 
   const address = AccountId(SS58_PREFIX).dec(productAccount.publicKey);

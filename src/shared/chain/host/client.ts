@@ -6,17 +6,24 @@ import { getWsProvider } from "@polkadot-api/ws-provider";
 import { createClient, type PolkadotClient } from "polkadot-api";
 
 const clientCache = new Map<`0x${string}`, PolkadotClient>();
+const directWsChains = new Set<`0x${string}`>();
+
+export function forceDirectWsForChain(genesis: `0x${string}`): void {
+  directWsChains.add(genesis);
+  const client = clientCache.get(genesis);
+  if (client == null) return;
+  client.destroy();
+  clientCache.delete(genesis);
+}
 
 export function getOrCreateClient(
   genesis: `0x${string}`,
   wsFallback: string,
-  inHost: () => boolean,
-  transport: "auto" | "ws" = "auto",
 ): PolkadotClient {
   let client = clientCache.get(genesis);
   if (!client) {
     const ws = getWsProvider(wsFallback);
-    const provider = transport === "auto" && inHost() ? createPapiProvider(genesis, ws) : ws;
+    const provider = createPapiProvider(genesis, ws);
     client = createClient(provider);
     clientCache.set(genesis, client);
   }
@@ -27,4 +34,5 @@ export function getOrCreateClient(
 export function resetClientCache(): void {
   clientCache.forEach((client) => client.destroy());
   clientCache.clear();
+  directWsChains.clear();
 }

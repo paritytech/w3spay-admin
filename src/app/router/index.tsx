@@ -18,7 +18,7 @@ import {
 import { queryClient } from "@shared/chain/query-client.ts";
 import { RootLayout } from "./layouts.tsx";
 import { AuthedLayout } from "./guards.tsx";
-import { AdminAccountCard } from "@features/session/pages/AdminAccess.tsx";
+import { AdminAccountCard, AdminManagementCard } from "@features/session/pages/AdminAccess.tsx";
 import { Balances } from "@features/balances/pages/Balances.tsx";
 import { ConfigureT3rminalRoute } from "@features/merchant/pages/ConfigureT3rminal.tsx";
 import { ItemsTab } from "@features/items/pages/ItemsTab.tsx";
@@ -33,6 +33,7 @@ import { ReportsProcessorGroup } from "@features/reports/pages/ReportsProcessorG
 import { Restaurants } from "@features/restaurants/pages/Restaurants.tsx";
 import { PaymentProcessors } from "@features/payment-processors/pages/PaymentProcessors.tsx";
 import { useSessionStore } from "@features/session/store/use-session-store.ts";
+import { useIsSuperAdmin } from "@features/session/contracts/is-admin-query.ts";
 
 const rootRoute = createRootRoute({ component: RootLayout });
 
@@ -254,11 +255,17 @@ const accountRoute = createRoute({
   staticData: { tab: "account", showTabs: true },
   component: function AccountRoute() {
     const readyAccount = useSessionStore((s) => s.readyAccount);
+    const isSuperAdmin = useIsSuperAdmin(readyAccount?.adminH160 ?? null);
     if (readyAccount == null) return null;
     return (
       <>
         <AdminAccountCard identity={readyAccount} title="Signed-in admin account" />
-  
+        {isSuperAdmin.granted ? (
+          <>
+            <div style={{ height: 12 }} />
+            <AdminManagementCard account={readyAccount} />
+          </>
+        ) : null}
       </>
     );
   },

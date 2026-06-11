@@ -8,6 +8,13 @@ import { withTimeout } from "./with-timeout.ts";
 
 const MAPPING_READ_TIMEOUT_MS = 10_000;
 
+// Mapping is one-way and permanent: cache positives only (accounts map mid-session).
+const mappedAccounts = new Set<string>();
+
+export function __resetAccountMappingCacheForTests(): void {
+  mappedAccounts.clear();
+}
+
 interface ReviveOriginalAccountQuery {
   readonly Revive?: {
     readonly OriginalAccount?: {
@@ -20,6 +27,9 @@ export async function isAccountMapped(
   client: PolkadotClient,
   walletAddress: string,
 ): Promise<boolean> {
+  const cacheKey = walletAddress.toLowerCase();
+  if (mappedAccounts.has(cacheKey)) return true;
+
   const unsafeApi = client.getUnsafeApi();
   try {
     const h160 = await withTimeout(
@@ -38,7 +48,9 @@ export async function isAccountMapped(
       MAPPING_READ_TIMEOUT_MS,
       "Revive.OriginalAccount",
     );
-    return original != null;
+    const mapped = original != null;
+    if (mapped) mappedAccounts.add(cacheKey);
+    return mapped;
   } catch {
     return false;
   }

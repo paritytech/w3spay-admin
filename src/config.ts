@@ -9,6 +9,11 @@ export type { EnvConfig, TokenLocation } from "@shared/lib/config";
 
 const DEFAULT_ADMIN_NETWORK: NetworkKey = "paseo-next-v2";
 
+function readDemoMode(): EnvConfig["features"]["demoMode"] {
+  const value = envString("VITE_DEMO_MODE", "auto").trim().toLowerCase();
+  return value === "on" || value === "off" || value === "auto" ? value : "auto";
+}
+
 function readEnv(): EnvConfig {
   const network: NetworkKey =
     parseNetworkKey(import.meta.env.VITE_NETWORK as string | undefined) ?? DEFAULT_ADMIN_NETWORK;
@@ -26,7 +31,7 @@ function readEnv(): EnvConfig {
       // Next v2 (the chain the report producer writes to).
       t3rminalBulletinIndexAddress: envString(
         "VITE_T3RMINAL_BULLETIN_INDEX_ADDRESS",
-        "0x3331A87C2B9312E246E6A7eE8D0C0AdD8d282B6F",
+        "0x3467596e99D24E62Ae5525DEAd280de2cAA735e4",
       ),
     },
     host: {
@@ -56,7 +61,7 @@ function readEnv(): EnvConfig {
       } as const,
     },
     features: {
-      demoMode: "off",
+      demoMode: readDemoMode(),
     },
     telemetry: {
       enabled: false,

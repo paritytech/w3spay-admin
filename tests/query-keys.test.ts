@@ -15,6 +15,15 @@ describe("query keys", () => {
     expect(queryKeys.isAdmin("0xadmin", "0xreg")).toEqual(["is-admin", "0xadmin", "0xreg"]);
   });
 
+  it("is-super-admin key keeps a null H160 distinct from a resolved one", () => {
+    expect(queryKeys.isSuperAdmin(null, "0xreg")).toEqual(["is-super-admin", null, "0xreg"]);
+    expect(queryKeys.isSuperAdmin("0xadmin", "0xreg")).toEqual([
+      "is-super-admin",
+      "0xadmin",
+      "0xreg",
+    ]);
+  });
+
   it("daily-report key lowercases the shopKey so casing can't fork the cache", () => {
     expect(queryKeys.dailyReport("0xAbC", "2026-06-01")).toEqual([
       "daily-report",
@@ -35,5 +44,6 @@ describe("query keys", () => {
     expect(queryKeys.reportIndex("shop")[0]).toBe(queryRoots.reportIndex[0]);
     expect(queryKeys.dailyReport("shop", "date")[0]).toBe(queryRoots.dailyReport[0]);
     expect(queryKeys.isAdmin(null, "r")[0]).toBe(queryRoots.isAdmin[0]);
+    expect(queryKeys.isSuperAdmin(null, "r")[0]).toBe(queryRoots.isSuperAdmin[0]);
   });
 });

@@ -31,7 +31,8 @@ export interface UseIsAdminResult {
  * singleton getter (despite the `use` prefix), so this stays a plain async
  * function callable from a query's `queryFn`.
  */
-export async function checkIsAdmin(
+async function readRoleFlag(
+  functionName: "isAdmin" | "isSuperAdmin",
   adminH160: string,
   registryAddress: string,
 ): Promise<boolean> {
@@ -39,13 +40,27 @@ export async function checkIsAdmin(
     readContract<[boolean]>(useMainClient().client, {
       address: registryAddress.toLowerCase() as `0x${string}`,
       abi: W3SPayRegistryABI,
-      functionName: "isAdmin",
+      functionName,
       args: [normalizeH160Address(adminH160)],
       origin: envConfig.chain.readOnlyOrigin,
       at: "best",
     }),
     CHECK_TIMEOUT_MS,
-    "registry isAdmin",
+    `registry ${functionName}`,
   );
   return granted;
+}
+
+export async function checkIsAdmin(
+  adminH160: string,
+  registryAddress: string,
+): Promise<boolean> {
+  return readRoleFlag("isAdmin", adminH160, registryAddress);
+}
+
+export async function checkIsSuperAdmin(
+  adminH160: string,
+  registryAddress: string,
+): Promise<boolean> {
+  return readRoleFlag("isSuperAdmin", adminH160, registryAddress);
 }

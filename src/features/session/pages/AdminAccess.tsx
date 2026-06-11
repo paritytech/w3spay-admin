@@ -6,6 +6,7 @@ import { AccessBody } from "@features/session/components/admin-access/AccessBody
 import type { AdminAccessProps } from "@features/session/components/admin-access/types.ts";
 
 export { AdminAccountCard } from "@features/session/components/admin-access/AdminAccountCard.tsx";
+export { AdminManagementCard } from "@features/session/components/admin-access/AdminManagementCard.tsx";
 export type {
   AccessVariant,
   AdminAccessProps,

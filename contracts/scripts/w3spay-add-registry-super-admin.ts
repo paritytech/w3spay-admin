@@ -11,7 +11,7 @@ import {
 async function main(): Promise<void> {
   loadDefaultEnv();
   const argv = parseArgv();
-  const newAdmin = normalizeH160(requireArg(argv, "admin", "0x EVM/H160 address"), "admin");
+  const target = normalizeH160(requireArg(argv, "super-admin", "0x EVM/H160 address"), "super-admin");
   const registryAddress = requireRegistryAddress();
   const ctx = await createScriptContext({ signer: true });
   if (!ctx.signer) throw new Error("missing signer context");
@@ -19,27 +19,29 @@ async function main(): Promise<void> {
   try {
     console.log(`Registry:  ${registryAddress}`);
     console.log(`Signer H160: ${ctx.signer.h160}`);
-    console.log(`New admin: ${newAdmin}`);
+    console.log(`New super admin: ${target}`);
 
     const senderIsSuper = await readRegistry<boolean>(ctx, registryAddress, "isSuperAdmin", [
       ctx.signer.h160,
     ]);
     if (!senderIsSuper) {
       throw new Error(
-        `signer ${ctx.signer.h160} is not a registry super admin. Only super admins can grant admin roles.`,
+        `signer ${ctx.signer.h160} is not a registry super admin. Only super admins can grant roles.`,
       );
     }
 
-    const alreadyAdmin = await readRegistry<boolean>(ctx, registryAddress, "isAdmin", [newAdmin]);
-    if (alreadyAdmin) {
-      console.log(`${newAdmin} is already an admin — nothing to do.`);
+    const alreadySuper = await readRegistry<boolean>(ctx, registryAddress, "isSuperAdmin", [target]);
+    if (alreadySuper) {
+      console.log(`${target} is already a super admin — nothing to do.`);
       return;
     }
 
-    const txHash = await writeRegistry(ctx, registryAddress, "addAdmin", [newAdmin]);
+    const txHash = await writeRegistry(ctx, registryAddress, "addSuperAdmin", [target]);
     console.log(`tx confirmed: ${txHash}`);
-    const isAdmin = await readRegistry<boolean>(ctx, registryAddress, "isAdmin", [newAdmin]);
-    console.log(`isAdmin(${newAdmin}) = ${isAdmin}`);
+    const isSuperAdmin = await readRegistry<boolean>(ctx, registryAddress, "isSuperAdmin", [target]);
+    const isAdmin = await readRegistry<boolean>(ctx, registryAddress, "isAdmin", [target]);
+    console.log(`isSuperAdmin(${target}) = ${isSuperAdmin}`);
+    console.log(`isAdmin(${target}) = ${isAdmin}`);
   } finally {
     ctx.client.destroy();
   }

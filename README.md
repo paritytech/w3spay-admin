@@ -13,20 +13,20 @@ Mobile-first admin console for the W3sPay payment surface. The app manages merch
 
 ```bash
 npm install
-cp .env.example .env.local        # set MNEMONIC and confirm VITE_* values
-npm run deploy                    # publishes the configured .dot product
+cp .env.example .env.local        # set your secrets
+npm run setup                     # guided deploy: registry (when needed) + publish
 ```
 
-See **[DEPLOY.md](./DEPLOY.md)** for the deploy process: environment setup, publishing the SPA, and fresh registry deployment.
+See **[DEPLOY.md](./DEPLOY.md)** for the full deploy guide: the `npm run setup` wizard, the `.env.local` variable table, flags (`--yes`, `--dry-run`, `--skip-app`, …), and the manual app/registry commands.
 
 ### Contracts
 
 ```bash
 cd contracts
 npm install
-cp .env.example .env              # set DEPLOYER_SEED
 npm run compile
 npm test
+# Deploy a fresh registry (DEPLOYER_SEED comes from the repo-root .env.local):
 npm run deploy:paseo-next-v2
 ```
 
@@ -45,23 +45,24 @@ npm run dev                       # http://localhost:5175
 
 1. Open the admin app inside the Polkadot host.
 2. The first screen shows your **account address** with a **Copy address** button. This is the canonical pallet-revive H160 form of your product account.
-3. Copy the address and send it, out-of-band, to the registry owner.
-4. The owner grants access:
+3. Copy the address and send it, out-of-band, to a registry super admin.
+4. A super admin grants access (the deployer/owner is the first super admin):
 
    ```bash
-   cd contracts
-   cp .env.example .env            # set DEPLOYER_SEED for the owner account
+   cd contracts                    # DEPLOYER_SEED comes from the repo-root .env.local
+   export W3SPAY_REGISTRY_ADDRESS=0x...  # registry printed by setup / saved in .env.local
    export W3SPAY_ADMIN=0x...
    npm run registry:add-admin
    # Non-default network:
-   NETWORK=previewnet npm run registry:add-admin
+   NETWORK=previewnet W3SPAY_REGISTRY_ADDRESS=0x... npm run registry:add-admin
    # or: npm run registry:add-admin -- --env previewnet
    ```
 
 5. Back in the app, tap **Check again**. Once `isAdmin(yourH160)` returns `true`, the admin console renders.
 
-   Alternatively, the registry **owner** can grant several admins at once from
-   the app: **Account → Registry admins** (one H160 per line; idempotent).
+   Alternatively, registry **super admins** can grant admins in bulk or promote
+   another super admin from the app: **Account → Registry admins**. Normal
+   admins do not see this card.
 
 
 ## Security

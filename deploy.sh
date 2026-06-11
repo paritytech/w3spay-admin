@@ -20,11 +20,14 @@
 #                                May also be supplied as the first CLI arg.
 #
 # Optional env:
-#   - DOTNS_GATEWAY_BASE        Final gateway host suffix (default: dot.li).
 #   - BULLETIN_ENV            bulletin-deploy --env id (default: paseo-next-v2).
 #                             The app chain (VITE_NETWORK) MUST match this
 #                             deployment env so reads, writes, and DotNS all
 #                             target the same Paseo network.
+#   - BULLETIN_DEPLOY_PUBLISH  When `true` (also accepts `1`/`yes`), passes
+#                             `--publish` to bulletin-deploy so the .dot is
+#                             listed in the on-chain Publisher registry on
+#                             paseo-next-v2. Defaults to `false` (upload only).
 #
 # Follows the deploy conventions and tooling expectations shared across the
 # W3sPay pilot surfaces.
@@ -33,10 +36,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/dist"
-GATEWAY_BASE="${DOTNS_GATEWAY_BASE:-dot.li}"
 BULLETIN_ENV="${BULLETIN_ENV:-paseo-next-v2}"
-# Reads the last `KEY=` line from a single .env* file, trimmed and unquoted.
-# Returns 1 when the key is absent or empty.
+# `BULLETIN_DEPLOY_PUBLISH` is resolved in two phases: shell env here, .env
+# fallback after `_read_envfile_key` is defined. Left empty for now so the
+# fallback can tell an unset var from an explicit value; the `false` default
+# is applied post-fallback.
+BULLETIN_DEPLOY_PUBLISH="${BULLETIN_DEPLOY_PUBLISH:-}"
 _read_envfile_key() {
   local file="$1" key="$2" line value
   line="$( (grep -E "^${key}=" "$file" || true) | tail -n 1)"
@@ -186,6 +191,23 @@ if [[ -z "$RAW_MNEMONIC" ]]; then
   done
 fi
 
+# Fall back to .env files when the shell env didn't set BULLETIN_DEPLOY_PUBLISH.
+# Mirrors the MNEMONIC .env fallback so a single .env entry drives the publish
+# decision without an extra shell export. The `false` default below is applied
+# after this block so a truly empty value is still a valid "upload only" run.
+if [[ -z "$BULLETIN_DEPLOY_PUBLISH" ]]; then
+  for _envfile in .env.production.local .env.production .env.local .env; do
+    [[ -f "$SCRIPT_DIR/$_envfile" ]] || continue
+    _f_publish="$(_read_envfile_key "$SCRIPT_DIR/$_envfile" BULLETIN_DEPLOY_PUBLISH || true)"
+    if [[ -n "$_f_publish" ]]; then
+      BULLETIN_DEPLOY_PUBLISH="$_f_publish"
+      echo "==> Using BULLETIN_DEPLOY_PUBLISH from ${_envfile}."
+      break
+    fi
+  done
+fi
+BULLETIN_DEPLOY_PUBLISH="${BULLETIN_DEPLOY_PUBLISH:-false}"
+
 if [[ -z "$RAW_MNEMONIC" ]]; then
   echo "Error: no mnemonic found. Provide one via:"
   echo ""
@@ -265,9 +287,9 @@ fi
 
 echo ""
 echo "==> Deploying ${TARGET} to Paseo Next v2 (BULLETIN_ENV=${BULLETIN_ENV})..."
-bulletin-deploy --env "$BULLETIN_ENV" --mnemonic "$RAW_MNEMONIC" "$BUILD_DIR" "$TARGET"
+if [[ "$BULLETIN_DEPLOY_PUBLISH" == "true" ]]; then
+  bulletin-deploy --publish --env "$BULLETIN_ENV" --mnemonic "$RAW_MNEMONIC" "$BUILD_DIR" "$TARGET"
+else
+  bulletin-deploy --env "$BULLETIN_ENV" --mnemonic "$RAW_MNEMONIC" "$BUILD_DIR" "$TARGET"
+fi
 
-NAME="${TARGET%.dot}"
-echo ""
-echo "==> Done! Live at:"
-echo "    https://${NAME}.${GATEWAY_BASE}"

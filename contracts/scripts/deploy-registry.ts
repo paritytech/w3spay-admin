@@ -19,6 +19,8 @@ import {
   SUPPORTED_NETWORKS,
 } from "../../src/shared/chain/host/networks";
 import { parseEnvSelector } from "./lib/argv";
+import { upsertEnvFile } from "../../scripts/lib/env-files";
+import { loadDefaultEnv } from "./lib/revive";
 
 const CONTRACTS_ROOT = resolve(__dirname, "..");
 const APP_ROOT = resolve(CONTRACTS_ROOT, "..");
@@ -48,25 +50,9 @@ interface SignerBundle {
   h160: `0x${string}`;
 }
 
-function loadEnvFile(path: string): void {
-  if (!existsSync(path)) return;
-  const raw = readFileSync(path, "utf8");
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const equals = trimmed.indexOf("=");
-    if (equals <= 0) continue;
-    const key = trimmed.slice(0, equals).trim();
-    if (process.env[key] !== undefined) continue;
-    const value = trimmed.slice(equals + 1).trim().replace(/^(['"])(.*)\1$/, "$2");
-    process.env[key] = value;
-  }
-}
-
-
 function requireEnv(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is not set. Add it to contracts/.env or export it.`);
+  if (!value) throw new Error(`${name} is not set. Add it to .env.local at the repo root or export it.`);
   return value;
 }
 
@@ -210,32 +196,6 @@ async function deployRegistry(api: any, signer: PolkadotSigner, origin: string, 
   return { contractAddress, txHash: result.txHash as string };
 }
 
-/**
- * Idempotently merge `values` into the dotenv file at `path`, preserving
- * existing comments, blank lines, and unrelated keys. Writes `headerComment`
- * first when creating a new file.
- */
-function upsertEnvFile(
-  path: string,
-  values: Record<string, string>,
-  options: { headerComment?: string } = {},
-): void {
-  let content = existsSync(path) ? readFileSync(path, "utf8") : "";
-  if (content === "" && options.headerComment) {
-    content = `${options.headerComment.replace(/\n*$/, "\n")}\n`;
-  }
-  for (const [key, value] of Object.entries(values)) {
-    const line = `${key}=${value}`;
-    const re = new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=.*$`, "m");
-    if (re.test(content)) content = content.replace(re, line);
-    else {
-      if (content.length && !content.endsWith("\n")) content += "\n";
-      content += `${line}\n`;
-    }
-  }
-  writeFileSync(path, content);
-}
-
 function writeDeployment(networkKey: string, address: `0x${string}`, txHash: string): void {
   const deploymentDir = resolve(CONTRACTS_ROOT, "deployments", networkKey);
   mkdirSync(deploymentDir, { recursive: true });
@@ -250,7 +210,7 @@ function writeDeployment(networkKey: string, address: `0x${string}`, txHash: str
 }
 
 async function main(): Promise<void> {
-  loadEnvFile(resolve(CONTRACTS_ROOT, ".env"));
+  loadDefaultEnv();
   const cliEnv = parseEnvSelector(process.argv, SUPPORTED_NETWORKS);
   if (cliEnv) process.env.NETWORK = cliEnv;
 

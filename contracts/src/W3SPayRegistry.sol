@@ -7,11 +7,14 @@ import "./interfaces/IW3SPayRegistry.sol";
  * @title W3SPayRegistry
  * @notice Admin-managed on-chain `(merchantId, terminalId) → destinationAccountId`
  *         directory consumed by W3SPay products at boot.
- * @dev See IW3SPayRegistry for the rationale. Admin model mirrors
- *      `T3rminalTransactionLog`:
- *        - `owner`              transfers ownership, grants/revokes admin.
- *        - `admins[address]`    can write merchant rows.
- *      `owner` is implicitly an admin (constructor seeds the mapping).
+ * @dev See IW3SPayRegistry for the rationale. Three-tier role model:
+ *        - `owner`                 transfers ownership; is implicitly a
+ *                                  super admin and admin.
+ *        - `superAdmins[address]`  grant/revoke admins and super admins.
+ *        - `admins[address]`       can write merchant rows.
+ *      Every super admin is also an admin, and the owner is always both
+ *      (constructor and `transferOwnership` seed all mappings; neither
+ *      `removeAdmin` nor `removeSuperAdmin` can demote the owner).
  *
  *      `version` is bumped on every mutation so the off-chain cache can
  *      short-circuit a full re-read when nothing changed.
@@ -55,6 +58,7 @@ contract W3SPayRegistry is IW3SPayRegistry {
 
     address public owner;
     mapping(address => bool) private admins;
+    mapping(address => bool) private superAdmins;
 
     /// @notice Monotonic counter bumped on every mutation. Lets clients short-circuit reads.
     uint64 public version;
@@ -71,13 +75,20 @@ contract W3SPayRegistry is IW3SPayRegistry {
         _;
     }
 
+    modifier onlySuperAdmin() {
+        require(superAdmins[msg.sender], "Not super admin");
+        _;
+    }
+
     // ========== CONSTRUCTOR ==========
 
     constructor() {
         owner = msg.sender;
         admins[msg.sender] = true;
+        superAdmins[msg.sender] = true;
         emit OwnershipTransferred(address(0), msg.sender);
         emit AdminAdded(msg.sender);
+        emit SuperAdminAdded(msg.sender);
     }
 
     // ========== WRITES ==========
@@ -365,14 +376,14 @@ contract W3SPayRegistry is IW3SPayRegistry {
 
     // ========== ADMIN ==========
 
-    function addAdmin(address admin) external override onlyOwner {
+    function addAdmin(address admin) external override onlySuperAdmin {
         require(admin != address(0), "Zero admin");
         require(!admins[admin], "Already admin");
         admins[admin] = true;
         emit AdminAdded(admin);
     }
 
-    function bulkAddAdmins(address[] calldata newAdmins) external override onlyOwner {
+    function bulkAddAdmins(address[] calldata newAdmins) external override onlySuperAdmin {
         for (uint256 i = 0; i < newAdmins.length; i++) {
             address a = newAdmins[i];
             require(a != address(0), "Zero admin");
@@ -383,11 +394,32 @@ contract W3SPayRegistry is IW3SPayRegistry {
         }
     }
 
-    function removeAdmin(address admin) external override onlyOwner {
+    function removeAdmin(address admin) external override onlySuperAdmin {
         require(admin != owner, "Cannot demote owner");
+        require(!superAdmins[admin], "Demote super admin first");
         require(admins[admin], "Not admin");
         admins[admin] = false;
         emit AdminRemoved(admin);
+    }
+
+    function addSuperAdmin(address account) external override onlySuperAdmin {
+        require(account != address(0), "Zero super admin");
+        require(!superAdmins[account], "Already super admin");
+        superAdmins[account] = true;
+        // Every super admin is an admin: seed the row-write role too.
+        if (!admins[account]) {
+            admins[account] = true;
+            emit AdminAdded(account);
+        }
+        emit SuperAdminAdded(account);
+    }
+
+    function removeSuperAdmin(address account) external override onlySuperAdmin {
+        require(account != owner, "Cannot demote owner");
+        require(superAdmins[account], "Not super admin");
+        // Demotes to normal admin; call removeAdmin afterwards to revoke fully.
+        superAdmins[account] = false;
+        emit SuperAdminRemoved(account);
     }
 
     function transferOwnership(address newOwner) external override onlyOwner {
@@ -399,6 +431,10 @@ contract W3SPayRegistry is IW3SPayRegistry {
         if (!admins[newOwner]) {
             admins[newOwner] = true;
             emit AdminAdded(newOwner);
+        }
+        if (!superAdmins[newOwner]) {
+            superAdmins[newOwner] = true;
+            emit SuperAdminAdded(newOwner);
         }
         emit OwnershipTransferred(previous, newOwner);
     }
@@ -446,6 +482,10 @@ contract W3SPayRegistry is IW3SPayRegistry {
 
     function isAdmin(address who) external view override returns (bool) {
         return admins[who];
+    }
+
+    function isSuperAdmin(address who) external view override returns (bool) {
+        return superAdmins[who];
     }
 
     function getItemConfig(string calldata configId)

@@ -40,28 +40,36 @@ venue, city, or receipt/TSE metadata. Those belong to a separate source.
 
 | Role | Granted by | Can do |
 |---|---|---|
-| `owner` | Constructor seeds this to the deployer. `transferOwnership` rotates. | Grant/revoke admin, transfer ownership. Is implicitly an admin too. |
-| `admin` | `owner` via `addAdmin`. | Register / update / revoke / pause / reactivate / hard-delete merchant rows. |
+| `owner` | Constructor seeds this to the deployer. `transferOwnership` rotates. | Transfer ownership; is implicitly a super admin and admin. |
+| `super-admin` | `owner`, or another super admin via `addSuperAdmin`. | Everything an admin can, plus grant/revoke admins and super admins. |
+| `admin` | A super admin via `addAdmin`. | Register / update / revoke / pause / reactivate / hard-delete merchant rows. |
 
-`owner` cannot remove itself from the admin set — that protects against
-locking yourself out by mistake. Use `transferOwnership` to hand the
-contract over.
+`owner` cannot be demoted from any role — that protects against locking
+yourself out by mistake. Use `transferOwnership` to hand the contract over.
+Every super admin is always an admin too, so `removeSuperAdmin` only demotes a
+super admin back to a normal admin (row-write access is kept); to revoke fully,
+call `removeSuperAdmin` first and then `removeAdmin`.
 
-The admin web app shows each connected user's H160 grant address. The
-contract owner grants that address with `w3spay-add-registry-admin.ts`.
+The admin web app shows each connected user's H160 grant address. Any registry
+super admin (the deployer/owner is the first) grants that address with
+`w3spay-add-registry-admin.ts`, or promotes a new super admin with
+`w3spay-add-registry-super-admin.ts`.
 
 ---
 
 ## One-time setup
 
-Set the deployer / admin mnemonic once. The deployer must be funded on the
-target Asset Hub and will become the contract `owner` + first admin via its
+Set `DEPLOYER_SEED` once, in the **repo-root `.env.local`** (one level up from
+`contracts/` — there is no `contracts/.env` anymore). The deployer must be funded
+on the target Asset Hub and becomes the contract `owner` + first admin via its
 pallet-revive H160 address.
 
 ```sh
-cp .env.example .env
-# edit DEPLOYER_SEED="twelve or twenty-four word mnemonic ..."
+# In ../.env.local (the repo root):
+DEPLOYER_SEED="twelve or twenty-four word mnemonic ..."
 ```
+
+Or run `npm run setup` from the repo root — it prompts for the seed and writes it.
 
 Verify everything builds and the test suite is green before you deploy:
 
@@ -111,16 +119,17 @@ merchant destinations were added. Existing deployments are not upgradeable
 in place: deploy a fresh registry and update every product environment
 that reads it.
 
-Every admin script reads `W3SPAY_REGISTRY_ADDRESS` from the env so the
-deployed address is never baked into source.
+Every admin script accepts `W3SPAY_REGISTRY_ADDRESS` as the script-specific
+registry override. When it is unset, scripts fall back to the latest
+`VITE_W3SPAY_REGISTRY_ADDRESS` from the repo-root `.env.local`.
 
 ---
 
 ## Scripts
 
 All registry scripts are PAPI-first and use the same `NETWORK` / `--env`
-selection model as the deployer. They load `contracts/.env` and
-`../.env.local`, so a fresh deployment's `VITE_W3SPAY_REGISTRY_ADDRESS` is
+selection model as the deployer. They load the repo-root `../.env.local`
+(then `../.env`), so a fresh deployment's `VITE_W3SPAY_REGISTRY_ADDRESS` is
 picked up automatically. Prefer either `NETWORK=previewnet npm run ...` or
 `npm run ... -- --env previewnet` when selecting a network through npm. The
 scripts also tolerate npm's warning-producing `npm run ... --env previewnet`
@@ -193,9 +202,10 @@ Wipes the row and removes it from the enumeration. The `(merchantId,
 terminalId)` pair can be re-registered afterwards. This is operator cleanup;
 normal admin flows should use `W3SPAY_STATUS=revoked` instead.
 
-### Grant another H160 address admin role (owner-only)
+### Grant another H160 address admin role (super-admin-only)
 
 ```sh
+export W3SPAY_REGISTRY_ADDRESS=0xabc...
 export W3SPAY_ADMIN=0xabc...
 npm run registry:add-admin
 ```
@@ -208,7 +218,34 @@ npm run registry:add-admin -- --env previewnet
 ```
 
 Idempotent — if the address is already admin, the script returns early
-without sending a transaction. Reverts on non-owner caller.
+without sending a transaction. Reverts on a non-super-admin caller.
+
+### Grant super admin role (super-admin-only)
+
+```sh
+export W3SPAY_REGISTRY_ADDRESS=0xabc...
+export W3SPAY_SUPER_ADMIN=0xabc...
+npm run registry:add-super-admin
+```
+
+Promotes the address to super admin **and** seeds the admin role (every super
+admin is an admin). Idempotent — returns early without a transaction if the
+address is already a super admin. Reverts on a non-super-admin caller.
+
+There is no removal script. To demote, call `removeSuperAdmin` (drops to a
+normal admin) and then `removeAdmin` (revokes fully) from a hardhat console:
+
+```sh
+npx hardhat console --network paseoAssetHub
+```
+
+```js
+> const Registry = await ethers.getContractAt("W3SPayRegistry", process.env.W3SPAY_REGISTRY_ADDRESS)
+> const feeData = await ethers.provider.getFeeData()
+> const gasPrice = feeData.gasPrice ? feeData.gasPrice * 10n : 10_000_000_000_000n
+> await Registry.removeSuperAdmin("0xTarget", { gasPrice, gasLimit: 500000n })
+> await Registry.removeAdmin("0xTarget", { gasPrice, gasLimit: 500000n })
+```
 
 ### List the current table (read-only)
 
@@ -368,6 +405,7 @@ PAPI maintenance scripts against `hardhat node`.
 | `Not admin` revert on a register/update/status/remove call | Signer H160 is not in the `admins` mapping | Run `npm run registry:add-admin` from the owner mnemonic, then re-run. |
 | `Not owner` revert on `addAdmin` / `transferOwnership` | `DEPLOYER_SEED` does not derive the owner H160 | Use the owner mnemonic, or transfer ownership from the current owner. |
 | `Set W3SPAY_REGISTRY_ADDRESS …` | Registry env var missing | Set `W3SPAY_REGISTRY_ADDRESS=0x...` or run `npm run deploy` so `.env.local` gets `VITE_W3SPAY_REGISTRY_ADDRESS`. |
+| `isSuperAdmin read reverted` during an admin grant | The script is pointed at the wrong registry address, often from a stale exported `VITE_W3SPAY_REGISTRY_ADDRESS` | Set `W3SPAY_REGISTRY_ADDRESS=0x...` to the registry printed by setup, then re-run. |
 | `Status unchanged` | Status script requested the row's current lifecycle state | Pick a different status or skip the write. |
 | `Merchant exists` | The `(merchantId, terminalId)` pair is already registered | Use `w3spay-update-merchant.ts` to change destination / displayName, or `w3spay-set-merchant-status.ts` for lifecycle changes. |
 

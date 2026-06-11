@@ -132,6 +132,8 @@ interface IW3SPayRegistry {
 
     event AdminAdded(address indexed admin);
     event AdminRemoved(address indexed admin);
+    event SuperAdminAdded(address indexed account);
+    event SuperAdminRemoved(address indexed account);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     event ItemConfigUpserted(
@@ -226,12 +228,14 @@ interface IW3SPayRegistry {
         uint32 size
     ) external;
 
-    // ========== ADMIN (onlyOwner) ==========
+    // ========== ROLE MANAGEMENT (onlySuperAdmin; transferOwnership onlyOwner) ==========
 
     function addAdmin(address admin) external;
     function removeAdmin(address admin) external;
-    function transferOwnership(address newOwner) external;
     function bulkAddAdmins(address[] calldata newAdmins) external;
+    function addSuperAdmin(address account) external;
+    function removeSuperAdmin(address account) external;
+    function transferOwnership(address newOwner) external;
 
     // ========== VIEWS ==========
 
@@ -242,6 +246,7 @@ interface IW3SPayRegistry {
     function getVersion() external view returns (uint64);
     function terminalKey(string calldata merchantId, string calldata terminalId) external pure returns (bytes32);
     function isAdmin(address who) external view returns (bool);
+    function isSuperAdmin(address who) external view returns (bool);
 
     function getItemConfig(string calldata configId) external view returns (ItemConfigRecord memory);
     function getAllItemConfigIds() external view returns (string[] memory);

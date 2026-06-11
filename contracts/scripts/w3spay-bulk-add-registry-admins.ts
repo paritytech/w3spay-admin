@@ -12,8 +12,8 @@ import {
 
 // ---------------------------------------------------------------------------
 // Edit this list. Each entry is an H160 (0x… 20 bytes) address that should be
-// granted the admin role on the W3SPayRegistry. Only the registry owner can
-// run this — non-owner signers will be rejected before any tx is submitted.
+// granted the admin role on the W3SPayRegistry. Only a registry super admin
+// can run this — non-super-admin signers will be rejected before any tx is submitted.
 //
 // The script is idempotent: addresses that are already admins are skipped,
 // and the run continues past per-tx failures (collecting them at the end)
@@ -29,7 +29,12 @@ const ADMINS: readonly string[] = [
   "0x39c2e7d38ff234f184c3ae596524a85ba312ec99",
   "0x861566ce073106916a2b7bb52d7e4193698e94a5",
   "0x750d00da231eb2b1512735c8adbe12d56787dba1",
-  "0x88258b2a02677624d69b5a57820146cbc0492ab1"
+  "0x88258b2a02677624d69b5a57820146cbc0492ab1",
+  "0x735b3b9fc36b670dc04415889f769e7b857b82db",
+  "0x99a31ce1eb5d6d45e5b3577f1014b7624e657c4f",
+  "0xd29568a810a14ddc3287142d2c417fe23c68606c",
+  "0xc2af8907c73443efb843b85d9e333f3d3201d67f",
+  "0xb48737b8fb509bbf840bf8c6556f1e23bc57bb36"
 ];
 
 interface Outcome {
@@ -69,13 +74,15 @@ async function main(): Promise<void> {
   const outcomes: Outcome[] = [];
   try {
     console.log(`Registry:  ${registryAddress}`);
-    console.log(`Owner H160: ${ctx.signer.h160}`);
+    console.log(`Signer H160: ${ctx.signer.h160}`);
     console.log(`Candidates: ${targets.length}`);
 
-    const owner = await readRegistry<`0x${string}`>(ctx, registryAddress, "owner");
-    if (owner.toLowerCase() !== ctx.signer.h160.toLowerCase()) {
+    const senderIsSuper = await readRegistry<boolean>(ctx, registryAddress, "isSuperAdmin", [
+      ctx.signer.h160,
+    ]);
+    if (!senderIsSuper) {
       throw new Error(
-        `signer ${ctx.signer.h160} is not the registry owner (${owner}). Only the owner can grant admin roles.`,
+        `signer ${ctx.signer.h160} is not a registry super admin. Only super admins can grant admin roles.`,
       );
     }
 

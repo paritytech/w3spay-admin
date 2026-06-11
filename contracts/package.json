@@ -11,6 +11,7 @@
     "deploy:paseo-next-v2": "hardhat compile && tsx scripts/deploy-registry.ts --env paseo-next-v2",
     "deploy:previewnet": "hardhat compile && tsx scripts/deploy-registry.ts --env previewnet",
     "registry:add-admin": "hardhat compile && tsx scripts/w3spay-add-registry-admin.ts",
+    "registry:add-super-admin": "hardhat compile && tsx scripts/w3spay-add-registry-super-admin.ts",
     "registry:bulk-add-admins": "hardhat compile && tsx scripts/w3spay-bulk-add-registry-admins.ts",
     "registry:register": "hardhat compile && tsx scripts/w3spay-register-merchant.ts",
     "registry:update": "hardhat compile && tsx scripts/w3spay-update-merchant.ts",

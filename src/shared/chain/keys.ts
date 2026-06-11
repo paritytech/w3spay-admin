@@ -16,6 +16,9 @@ export const queryKeys = {
   isAdmin: (adminH160: string | null, registryAddress: string) =>
     ["is-admin", adminH160, registryAddress] as const,
 
+  isSuperAdmin: (adminH160: string | null, registryAddress: string) =>
+    ["is-super-admin", adminH160, registryAddress] as const,
+
   reportIndex: (shopKey: string) => ["report-index", shopKey] as const,
 
   reportIndices: (fingerprint: string) => ["report-indices", fingerprint] as const,
@@ -42,6 +45,7 @@ export const queryRoots = {
   restaurantRegistry: ["restaurant-registry"] as const,
   processorConfigRegistry: ["processor-config-registry"] as const,
   isAdmin: ["is-admin"] as const,
+  isSuperAdmin: ["is-super-admin"] as const,
   reportIndex: ["report-index"] as const,
   reportIndices: ["report-indices"] as const,
   tokenBalances: ["token-balances"] as const,

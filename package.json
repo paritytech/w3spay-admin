@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5175 --strictPort",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
-    "deploy": "./deploy.sh",
+    "setup": "tsx scripts/setup.ts",
     "start": "vite --host 0.0.0.0 --port 5175 --strictPort",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -42,10 +42,14 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@polkadot-labs/hdkd": "^0.0.27",
+    "@polkadot-labs/hdkd-helpers": "^0.0.28",
     "@tanstack/react-router-devtools": "^1",
+    "@types/node": "^25.9.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.0.4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vite": "^7.1.12",
     "vitest": "^3.0.0"
