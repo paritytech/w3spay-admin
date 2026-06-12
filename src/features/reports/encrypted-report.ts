@@ -2,11 +2,10 @@
 // @paritytech
 
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { randomBytes } from "@noble/hashes/utils.js";
 
 export const ENCRYPTED_REPORT_VERSION_V2 = 2 as const;
-
-export const ENCRYPTED_REPORT_SCHEME_V1 = "qr-password-xchacha20-v1" as const;
 
 export const XCHACHA_NONCE_BYTES = 24;
 
@@ -14,7 +13,6 @@ export const REPORT_KEY_BYTES = 32;
 
 export interface EncryptedReportEnvelopeV2 {
   readonly v: typeof ENCRYPTED_REPORT_VERSION_V2;
-  readonly scheme: typeof ENCRYPTED_REPORT_SCHEME_V1;
   /**
    * Hex-encoded `nonce(24) || ciphertext` produced by XChaCha20-Poly1305.
    * No `0x` prefix — matches the upstream producer's convention.
@@ -39,6 +37,12 @@ export interface EncryptedReportMeta {
   readonly terminal: string;
   /** ISO timestamp at which the envelope was produced. */
   readonly encryptedAt: string;
+  /**
+   * Short fingerprint (8 uppercase hex) of the key that encrypted this
+   * report. Written by t3rminal; absent on older envelopes. Lets the panel
+   * show which passcode era a report belongs to.
+   */
+  readonly keyFingerprint?: string;
 }
 
 /**
@@ -64,19 +68,12 @@ export function decodeEncryptedReportEnvelope(raw: unknown): EncryptedReportEnve
   }
   const r = raw as {
     readonly v?: unknown;
-    readonly scheme?: unknown;
     readonly encrypted?: unknown;
     readonly meta?: unknown;
     readonly recipients?: unknown;
   };
 
   if (r.v === ENCRYPTED_REPORT_VERSION_V2) {
-    if (r.scheme !== ENCRYPTED_REPORT_SCHEME_V1) {
-      return {
-        kind: "invalid",
-        reason: `unknown v2 scheme: ${String(r.scheme)}`,
-      };
-    }
     if (typeof r.encrypted !== "string" || r.encrypted.length === 0) {
       return { kind: "invalid", reason: "missing or empty `encrypted` field" };
     }
@@ -88,7 +85,6 @@ export function decodeEncryptedReportEnvelope(raw: unknown): EncryptedReportEnve
       kind: "v2",
       envelope: {
         v: ENCRYPTED_REPORT_VERSION_V2,
-        scheme: ENCRYPTED_REPORT_SCHEME_V1,
         encrypted: r.encrypted,
         meta,
       },
@@ -113,6 +109,7 @@ function decodeMeta(raw: unknown): EncryptedReportMeta | null {
     readonly txCount?: unknown;
     readonly terminal?: unknown;
     readonly encryptedAt?: unknown;
+    readonly keyFingerprint?: unknown;
   };
   if (
     typeof m.date !== "string" ||
@@ -127,6 +124,7 @@ function decodeMeta(raw: unknown): EncryptedReportMeta | null {
     txCount: m.txCount,
     terminal: m.terminal,
     encryptedAt: m.encryptedAt,
+    ...(typeof m.keyFingerprint === "string" ? { keyFingerprint: m.keyFingerprint } : {}),
   };
 }
 
@@ -142,8 +140,6 @@ export class DecryptReportError extends Error {
 }
 
 export type DecryptReportErrorCode =
-  /** `reportPassword` did not decode to a 32-byte key. */
-  | "badPassword"
   /** Ciphertext is shorter than the nonce, or hex couldn't be parsed. */
   | "malformedCiphertext"
   /** XChaCha20-Poly1305 rejected the tag — wrong key or tampering. */
@@ -157,9 +153,9 @@ export type DecryptReportErrorCode =
  */
 export function decryptReportV2(
   envelope: EncryptedReportEnvelopeV2,
-  reportPassword: string,
+  passphrase: string,
 ): string {
-  const key = passwordToKey(reportPassword);
+  const key = passphraseToKey(passphrase);
   const packed = hexToBytes(envelope.encrypted);
   if (packed === null) {
     throw new DecryptReportError(
@@ -203,7 +199,7 @@ export function decryptReportV2(
  */
 export function encryptReportV2(
   plaintext: string,
-  reportPassword: string,
+  passphrase: string,
   meta: EncryptedReportMeta,
   nonce: Uint8Array = randomBytes(XCHACHA_NONCE_BYTES),
 ): EncryptedReportEnvelopeV2 {
@@ -213,7 +209,7 @@ export function encryptReportV2(
       `nonce must be ${XCHACHA_NONCE_BYTES} bytes, got ${nonce.length}`,
     );
   }
-  const key = passwordToKey(reportPassword);
+  const key = passphraseToKey(passphrase);
   let ct: Uint8Array;
   try {
     ct = xchacha20poly1305(key, nonce).encrypt(new TextEncoder().encode(plaintext));
@@ -225,59 +221,34 @@ export function encryptReportV2(
   packed.set(ct, nonce.length);
   return {
     v: ENCRYPTED_REPORT_VERSION_V2,
-    scheme: ENCRYPTED_REPORT_SCHEME_V1,
     encrypted: bytesToHex(packed),
     meta,
   };
 }
 
+export const REPORT_PASSPHRASE_KEY_DOMAIN = "t3rminal-manual-key:" as const;
+
 /**
- * Convert the QR-shared `reportPassword` string into a 32-byte symmetric
- * key.
+ * Derive the 32-byte symmetric key from the report passphrase.
  *
- * The producer (`createPasswordSeed` in `t3rminal-config-qr.ts`) generates
- * `password = base64url(sha256(...))` — 32 raw random bytes encoded with
- * the unpadded base64url alphabet. We reverse that here.
- *
- * Wrong-length results are rejected with a typed error so the caller can
- * branch on `code === "badPassword"` instead of inspecting messages.
+ * Mirrors `t3rminal/lib/crypto/manual-key.ts` `deriveKeyFromPassphrase`
+ * byte-for-byte: `sha256(utf8("t3rminal-manual-key:" + passphrase.trim()))`.
+ * The passphrase is the QR-wire `reportPassword` (derived from the admin
+ * passcode) for QR-flow terminals, or a phrase the merchant typed directly
+ * on the terminal's encryption settings.
  */
-export function passwordToKey(reportPassword: string): Uint8Array {
-  const decoded = base64UrlDecode(reportPassword);
-  if (decoded === null) {
-    throw new DecryptReportError(
-      "badPassword",
-      "reportPassword is not valid base64url",
-    );
-  }
-  if (decoded.length !== REPORT_KEY_BYTES) {
-    throw new DecryptReportError(
-      "badPassword",
-      `reportPassword decodes to ${decoded.length} bytes; expected ${REPORT_KEY_BYTES}`,
-    );
-  }
-  return decoded;
+export function passphraseToKey(passphrase: string): Uint8Array {
+  return sha256(new TextEncoder().encode(`${REPORT_PASSPHRASE_KEY_DOMAIN}${passphrase.trim()}`));
 }
 
 /**
- * Base64url decode (RFC 4648 §5, no padding). Mirrors the encoder in
- * `t3rminal-config-qr.ts`. Returns `null` on invalid input rather than
- * throwing so the `badPassword` classification stays clean.
+ * Short, human-readable fingerprint of a derived key (first 8 hex chars of
+ * sha256 over the key, uppercase). Matches the fingerprint t3rminal shows
+ * under Settings → Report Encryption so an operator can tell passcode eras
+ * apart.
  */
-export function base64UrlDecode(value: string): Uint8Array | null {
-  if (typeof value !== "string") return null;
-  const padded = value
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-  const padding = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
-  try {
-    const binary = atob(padded + padding);
-    const out = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-    return out;
-  } catch {
-    return null;
-  }
+export function keyFingerprint(key: Uint8Array): string {
+  return bytesToHex(sha256(key)).slice(0, 8).toUpperCase();
 }
 
 /**
@@ -306,8 +277,10 @@ import type { DailyReport } from "./daily-report.ts";
 export interface UseDecryptedReportArgs {
   /** Bulletin CID. `null` keeps the hook idle. */
   readonly cid: string | null;
-  /** QR-shared report password from `T3rminalAssignmentV1`. */
-  readonly reportPassword: string | null;
+  /** Candidate passphrases (derived wire password and/or raw passcode), tried in order. */
+  readonly passwords: ReadonlyArray<string>;
+  /** Bumped on each explicit unlock so a corrected passcode refetches. */
+  readonly unlockNonce: number;
   /** IPFS gateway base URL — pass from `resolveNetwork(...).ipfsGateway`. */
   readonly gatewayBase: string;
 }
@@ -334,6 +307,7 @@ export type DecryptedReportState =
   | {
       readonly kind: "decrypt-error";
       readonly reason: string;
+      readonly meta: EncryptedReportMeta;
       readonly refresh: () => void;
     }
   | {

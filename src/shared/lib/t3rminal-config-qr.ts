@@ -23,11 +23,15 @@ import type { ItemConfig } from "@features/items/items-model.ts";
 export const T3RMINAL_QR_TYPE = T3RMINAL_CONFIG_QR_UR_TYPE;
 export const T3RMINAL_QR_VERSION = T3RMINAL_CONFIG_QR_VERSION_V1;
 export const T3RMINAL_QR_VERSION_V2 = T3RMINAL_CONFIG_QR_VERSION_V2;
+/**
+ * Wire label for the QR `passwordScheme` field. Stays `admin-public-key-sha256-v1`
+ * for wire compatibility — both QR codecs hard-fail on any other value — even
+ * though the password is now derived from an admin-defined passcode rather than
+ * a product public key.
+ */
 export const T3RMINAL_REPORT_PASSWORD_SCHEME_V1 = SHARED_REPORT_PASSWORD_SCHEME_V1;
 
-export const T3RMINAL_REPORT_PASSWORD_DOMAIN_V1 = "w3spay:t3rminal-report-password:v1" as const;
-
-export const T3RMINAL_PASSWORD_SALT_BYTES = 16;
+export const T3RMINAL_REPORT_PASSCODE_DOMAIN_V1 = "w3spay:t3rminal-report-passcode:v1" as const;
 
 /** Byte ceiling for the legacy v1 JSON payload; v2 uses the BCTS density check instead. */
 export const T3RMINAL_QR_PAYLOAD_BYTE_LIMIT = 2048;
@@ -118,30 +122,19 @@ export function encodeT3rminalConfigPayloadV2(
   return sharedEncodeT3rminalConfigQrV2(payload);
 }
 
-export interface PasswordSeed {
-  readonly salt: Uint8Array;
-  readonly password: string;
-}
-
-/** Generate a fresh salt + derive the v1 report password; persist the salt to reproduce it, rotating it rotates the password. */
-export function createPasswordSeed(publicKey: Uint8Array): PasswordSeed {
-  const salt = new Uint8Array(T3RMINAL_PASSWORD_SALT_BYTES);
-  cryptoSource().getRandomValues(salt);
-  return { salt, password: deriveReportPassword(publicKey, salt) };
-}
-
-/** Derive the v1 report password (base64url of the 32-byte digest) from a product public key and 16-byte salt. Deterministic in its inputs. */
-export function deriveReportPassword(publicKey: Uint8Array, salt: Uint8Array): string {
-  if (publicKey.length === 0) throw new Error("publicKey is empty");
-  if (salt.length === 0) throw new Error("salt is empty");
-  const domain = TEXT_ENCODER.encode(T3RMINAL_REPORT_PASSWORD_DOMAIN_V1);
-  const total = domain.length + publicKey.length + salt.length;
-  const buffer = new Uint8Array(total);
-  buffer.set(domain, 0);
-  buffer.set(publicKey, domain.length);
-  buffer.set(salt, domain.length + publicKey.length);
-  const digest = sha256(buffer);
-  return base64UrlEncode(digest);
+/**
+ * Derive the QR-wire `reportPassword` (43-char base64url of sha256) from an
+ * admin-defined passcode. t3rminal installs this string as its manual
+ * passphrase and encrypts daily reports with
+ * `sha256("t3rminal-manual-key:" + reportPassword)`; admin recomputes both
+ * derivations from the typed passcode to unlock. Deterministic; trims.
+ */
+export function deriveReportPasswordFromPasscode(passcode: string): string {
+  const trimmed = passcode.trim();
+  if (trimmed.length === 0) throw new Error("Passcode is empty");
+  return base64UrlEncode(
+    sha256(TEXT_ENCODER.encode(`${T3RMINAL_REPORT_PASSCODE_DOMAIN_V1}:${trimmed}`)),
+  );
 }
 
 /** Base64url encode (RFC 4648 §5, no padding). */
@@ -152,10 +145,3 @@ export function base64UrlEncode(bytes: Uint8Array): string {
 }
 
 const TEXT_ENCODER = /* @__PURE__ */ new TextEncoder();
-
-function cryptoSource(): Crypto {
-  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
-    return crypto;
-  }
-  throw new Error("`crypto.getRandomValues` is not available in this runtime.");
-}

@@ -9,17 +9,12 @@ import {
   T3RMINAL_REPORT_PASSWORD_SCHEME_V1,
   buildT3rminalConfigPayload,
   buildT3rminalConfigPayloadV2,
-  createPasswordSeed,
-  deriveReportPassword,
+  deriveReportPasswordFromPasscode,
   encodeT3rminalConfigPayload,
   encodeT3rminalConfigPayloadV2,
 } from "@shared/lib/t3rminal-config-qr.ts";
 import type { ItemConfig } from "@features/items/items-model.ts";
 import { decodeT3rminalConfigQr } from "@shared/lib/config-qr";
-
-const PUBLIC_KEY = new Uint8Array(32).fill(0xab);
-const SALT_A = new Uint8Array(16).fill(0x01);
-const SALT_B = new Uint8Array(16).fill(0x02);
 
 const merchant: AdminMerchant = {
   key: "0xkey",
@@ -36,37 +31,30 @@ const merchant: AdminMerchant = {
   updatedAt: "2026-05-25T00:00:00Z",
 };
 
-describe("report password derivation", () => {
-  it("is deterministic for the same public key + salt", () => {
-    const a = deriveReportPassword(PUBLIC_KEY, SALT_A);
-    const b = deriveReportPassword(PUBLIC_KEY, SALT_A);
-    expect(a).toEqual(b);
-  });
-
-  it("changes when the salt changes", () => {
-    expect(deriveReportPassword(PUBLIC_KEY, SALT_A)).not.toEqual(
-      deriveReportPassword(PUBLIC_KEY, SALT_B),
+describe("deriveReportPasswordFromPasscode", () => {
+  it("is deterministic for the same passcode", () => {
+    expect(deriveReportPasswordFromPasscode("hunter2")).toBe(
+      deriveReportPasswordFromPasscode("hunter2"),
     );
   });
 
-  it("changes when the public key changes", () => {
-    const otherKey = new Uint8Array(32).fill(0xcd);
-    expect(deriveReportPassword(PUBLIC_KEY, SALT_A)).not.toEqual(
-      deriveReportPassword(otherKey, SALT_A),
+  it("trims surrounding whitespace", () => {
+    expect(deriveReportPasswordFromPasscode("  x  ")).toBe(deriveReportPasswordFromPasscode("x"));
+  });
+
+  it("changes when the passcode changes", () => {
+    expect(deriveReportPasswordFromPasscode("alpha")).not.toBe(
+      deriveReportPasswordFromPasscode("beta"),
     );
   });
 
-  it("base64url-encodes 32 bytes of digest", () => {
-    const password = deriveReportPassword(PUBLIC_KEY, SALT_A);
-    // base64url uses [A-Za-z0-9_-] with no padding; 32 bytes → 43 chars.
-    expect(password).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(password.length).toBe(43);
+  it("produces a 43-char base64url string (sha256, no padding)", () => {
+    expect(deriveReportPasswordFromPasscode("hunter2")).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
-  it("createPasswordSeed returns a salt + matching password", () => {
-    const seed = createPasswordSeed(PUBLIC_KEY);
-    expect(seed.salt.length).toBe(16);
-    expect(seed.password).toEqual(deriveReportPassword(PUBLIC_KEY, seed.salt));
+  it("throws on an empty or whitespace-only passcode", () => {
+    expect(() => deriveReportPasswordFromPasscode("")).toThrow(/empty/i);
+    expect(() => deriveReportPasswordFromPasscode("   ")).toThrow(/empty/i);
   });
 });
 
@@ -75,7 +63,7 @@ describe("QR payload encoding", () => {
     merchant,
     itemConfigId: "bar",
     itemConfigCid: "bafkreigh2akiscaildc26b3xbcoab4y3afyywjcttzkv6f7vfyqgwwxe7q",
-    reportPassword: deriveReportPassword(PUBLIC_KEY, SALT_A),
+    reportPassword: deriveReportPasswordFromPasscode("test passcode"),
     registryAddress: "0xfec1497a5fbfc2583ea52bc7504701f95ea4a68a",
     issuedAt: "2026-05-26T10:00:00Z",
   });
@@ -116,7 +104,7 @@ describe("QR payload encoding", () => {
   });
 });
 
-const SAMPLE_REPORT_PASSWORD = deriveReportPassword(PUBLIC_KEY, SALT_A);
+const SAMPLE_REPORT_PASSWORD = deriveReportPasswordFromPasscode("test passcode");
 
 const sampleConfig: ItemConfig = {
   id: "bar",

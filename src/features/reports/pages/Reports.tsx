@@ -105,6 +105,7 @@ function buildStreamTerminals(
     const shopKey = m.key.toLowerCase() as `0x${string}`;
     const index = indices.get(shopKey);
     const entries = index?.entries ?? [];
+    const reportPassword = assignments.get(m.key)?.reportPassword ?? null;
     out.push({
       terminal: {
         key: m.key,
@@ -112,7 +113,8 @@ function buildStreamTerminals(
         terminalId: m.terminalId,
       },
       shopKey,
-      reportPassword: assignments.get(m.key)?.reportPassword ?? null,
+      reportPasswords: reportPassword != null ? [reportPassword] : [],
+      unlockNonce: 0,
       entries,
     });
   }

@@ -8,6 +8,7 @@ import {
   mintAssignmentRecord,
   type T3rminalAssignmentV1,
 } from "@shared/store/t3rminal-assignments.ts";
+import { deriveReportPasswordFromPasscode } from "@shared/lib/t3rminal-config-qr.ts";
 
 const PUBLIC_KEY = new Uint8Array(32).fill(0xab);
 const NOW = "2026-05-26T10:00:00Z";
@@ -46,59 +47,63 @@ const cafeConfig: ItemConfig = {
 };
 
 describe("mintAssignmentRecord", () => {
-  it("derives a password from the admin public key on first assignment", () => {
+  const PASSCODE = "fika at three";
+
+  it("derives the report password from the passcode and stores no salt", () => {
     const record = mintAssignmentRecord({
       merchant,
       config: barConfig,
       itemConfigCid: "cid-bar",
       adminPublicKey: PUBLIC_KEY,
       existing: null,
-      regeneratePassword: false,
+      passcode: PASSCODE,
       nowIso: NOW,
     });
     expect(record.merchantKey).toBe(merchant.key);
     expect(record.itemConfigId).toBe("bar");
     expect(record.itemConfigCid).toBe("cid-bar");
     expect(record.passwordScheme).toBe("admin-public-key-sha256-v1");
-    // 32 bytes → base64url 43 chars (no padding).
-    expect(record.reportPassword).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(record.passwordSaltHex).toMatch(/^0x[0-9a-f]{32}$/);
+    expect(record.reportPassword).toBe(deriveReportPasswordFromPasscode(PASSCODE));
+    expect(record.passwordSaltHex).toBeUndefined();
     expect(record.adminPublicKeyHex.length).toBe(2 + PUBLIC_KEY.length * 2);
   });
 
-  it("preserves the existing password when re-selecting a different config", () => {
-    const first = mintAssignmentRecord({
-      merchant,
-      config: barConfig,
+  it("keeps the existing password and salt when passcode is null", () => {
+    const legacy: T3rminalAssignmentV1 = {
+      merchantKey: merchant.key,
+      itemConfigId: "bar",
       itemConfigCid: "cid-bar",
-      adminPublicKey: PUBLIC_KEY,
-      existing: null,
-      regeneratePassword: false,
-      nowIso: NOW,
-    });
+      receivingAddress: merchant.destinationSs58,
+      passwordScheme: "admin-public-key-sha256-v1",
+      reportPassword: "legacy-random-password",
+      passwordSaltHex: "0xabcdef0123456789abcdef0123456789",
+      adminPublicKeyHex: "0xdead",
+      issuedAt: NOW,
+      payloadVersion: 2,
+    };
     const switched = mintAssignmentRecord({
       merchant,
       config: cafeConfig,
       itemConfigCid: "cid-cafe",
       adminPublicKey: PUBLIC_KEY,
-      existing: first,
-      regeneratePassword: false,
+      existing: legacy,
+      passcode: null,
       nowIso: "2026-05-26T11:00:00Z",
     });
-    expect(switched.reportPassword).toBe(first.reportPassword);
-    expect(switched.passwordSaltHex).toBe(first.passwordSaltHex);
+    expect(switched.reportPassword).toBe(legacy.reportPassword);
+    expect(switched.passwordSaltHex).toBe(legacy.passwordSaltHex);
     expect(switched.itemConfigId).toBe("cafe");
     expect(switched.itemConfigCid).toBe("cid-cafe");
   });
 
-  it("rotates salt + password when regeneratePassword is set", () => {
+  it("replaces the password when a new passcode is given", () => {
     const first = mintAssignmentRecord({
       merchant,
       config: barConfig,
       itemConfigCid: "cid-bar",
       adminPublicKey: PUBLIC_KEY,
       existing: null,
-      regeneratePassword: false,
+      passcode: "old passcode",
       nowIso: NOW,
     });
     const rotated = mintAssignmentRecord({
@@ -107,29 +112,62 @@ describe("mintAssignmentRecord", () => {
       itemConfigCid: "cid-bar",
       adminPublicKey: PUBLIC_KEY,
       existing: first,
-      regeneratePassword: true,
+      passcode: "new passcode",
       nowIso: NOW,
     });
-    expect(rotated.passwordSaltHex).not.toBe(first.passwordSaltHex);
+    expect(rotated.reportPassword).toBe(deriveReportPasswordFromPasscode("new passcode"));
     expect(rotated.reportPassword).not.toBe(first.reportPassword);
+    expect(rotated.passwordSaltHex).toBeUndefined();
+  });
+
+  it("throws when passcode is null and there is no existing record", () => {
+    expect(() =>
+      mintAssignmentRecord({
+        merchant,
+        config: barConfig,
+        itemConfigCid: "cid-bar",
+        adminPublicKey: PUBLIC_KEY,
+        existing: null,
+        passcode: null,
+        nowIso: NOW,
+      }),
+    ).toThrow(/no existing password/i);
   });
 });
 
 describe("assignments payload codec", () => {
-  it("roundtrips encode → decode for the in-memory map", () => {
+  it("roundtrips a passcode-derived record (no salt) through encode → decode", () => {
     const record: T3rminalAssignmentV1 = mintAssignmentRecord({
       merchant,
       config: barConfig,
       itemConfigCid: "cid-bar",
       adminPublicKey: PUBLIC_KEY,
       existing: null,
-      regeneratePassword: false,
+      passcode: "fika at three",
       nowIso: NOW,
     });
+    expect(record.passwordSaltHex).toBeUndefined();
     const map = new Map<string, T3rminalAssignmentV1>([[record.merchantKey, record]]);
-    const encoded = encodeAssignmentsPayload(map);
-    const decoded = decodeAssignmentsPayload(encoded);
+    const decoded = decodeAssignmentsPayload(encodeAssignmentsPayload(map));
     expect(decoded.get(record.merchantKey)).toEqual(record);
+  });
+
+  it("roundtrips a legacy record that still carries passwordSaltHex", () => {
+    const legacy: T3rminalAssignmentV1 = {
+      merchantKey: merchant.key,
+      itemConfigId: "bar",
+      itemConfigCid: "cid-bar",
+      receivingAddress: merchant.destinationSs58,
+      passwordScheme: "admin-public-key-sha256-v1",
+      reportPassword: "legacy-random-password",
+      passwordSaltHex: "0xabcdef0123456789abcdef0123456789",
+      adminPublicKeyHex: "0xdead",
+      issuedAt: NOW,
+      payloadVersion: 2,
+    };
+    const map = new Map<string, T3rminalAssignmentV1>([[legacy.merchantKey, legacy]]);
+    const decoded = decodeAssignmentsPayload(encodeAssignmentsPayload(map));
+    expect(decoded.get(legacy.merchantKey)).toEqual(legacy);
   });
 
   it("returns an empty map for malformed input", () => {

@@ -3,8 +3,11 @@
 
 import { useEffect, useState } from "react";
 
-import { useMerchantWriteOps } from "@features/merchant/contracts/use-merchant-write-ops.ts";
+import { useRegisterMerchant } from "@features/merchant/contracts/merchant-mutations.ts";
+import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
+import type { TxStatus } from "@/shared/chain/contracts";
+import { transactionToastMessage } from "@shared/utils/transaction-toast.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import {
   ADotted,
@@ -16,7 +19,12 @@ import {
   ATextarea,
 } from "@shared/components/primitives.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
-import type { MerchantForm, MerchantFormErrors, MerchantKind } from "@features/merchant/merchant-model.ts";
+import {
+  buildRegisterMerchant,
+  type MerchantForm,
+  type MerchantFormErrors,
+  type MerchantKind,
+} from "@features/merchant/merchant-model.ts";
 
 const DEFAULT_MERCHANT_ID = "funkhaus";
 
@@ -32,36 +40,61 @@ export interface MerchantNewProps {
 }
 
 export function MerchantNew({ mode }: MerchantNewProps) {
-  const { writes } = useMerchantWriteOps();
+  const registerMerchant = useRegisterMerchant();
+  const { merchants } = useMerchants();
   const navigate = useNavigate();
   const router = useRouter();
   const canGoBack = useCanGoBack();
 
   const [form, setForm] = useState<MerchantForm>(BLANK_FORM);
   const [errors, setErrors] = useState<MerchantFormErrors>({});
+  const [txStatus, setTxStatus] = useState<TxStatus | null>(null);
 
+  const resetMutation = registerMerchant.reset;
   // The mode dependency clears the form when the user switches kind without unmounting.
   useEffect(() => {
     setForm(BLANK_FORM);
     setErrors({});
-    writes.resetSubmit();
-  }, [mode, writes.resetSubmit]);
+    setTxStatus(null);
+    resetMutation();
+  }, [mode, resetMutation]);
 
-  const { submitState, submitMessage } = writes;
+  const busy = registerMerchant.isPending;
   const isT3rminal = mode === "t3rminal";
   const disabled =
     (!isT3rminal && !form.terminalId) ||
     !form.merchantId ||
     !form.destination ||
-    submitState === "signing" ||
-    submitState === "submitting";
+    busy;
+
+  const submitError = registerMerchant.error;
+  const statusMessage =
+    submitError != null
+      ? submitError.message
+      : txStatus != null
+        ? transactionToastMessage(txStatus)
+        : null;
 
   const onBack = () =>
     canGoBack ? router.history.back() : navigate({ to: "/merchants/new" });
-  const onSubmit = () => {
-    void writes.registerMerchant(form, setErrors, mode).then((key) => {
-      if (key != null) navigate({ to: "/merchants/$merchantKey", params: { merchantKey: key } });
-    });
+
+  const onSubmit = async () => {
+    const input = buildRegisterMerchant(form, merchants, mode);
+    if (!input.ok) {
+      setErrors(input.errors);
+      return;
+    }
+    setErrors({});
+    setTxStatus("preparing");
+    try {
+      await registerMerchant.mutateAsync({ payload: input.payload, onStatus: setTxStatus });
+    } catch {
+      // Surfaced via registerMerchant.error.
+      return;
+    } finally {
+      setTxStatus(null);
+    }
+    navigate({ to: "/merchants/$merchantKey", params: { merchantKey: input.terminalKey } });
   };
 
   return (
@@ -188,27 +221,27 @@ export function MerchantNew({ mode }: MerchantNewProps) {
         </div>
       </div>
 
-      {submitMessage ? (
+      {statusMessage ? (
         <div
           style={{
             marginTop: 10,
             padding: "10px 12px",
-            border: `1px solid ${submitState === "error" ? COLOR.red : COLOR.border}`,
+            border: `1px solid ${submitError != null ? COLOR.red : COLOR.border}`,
             borderRadius: 12,
-            background: submitState === "error" ? "rgba(239,68,68,0.08)" : COLOR.surface,
-            color: submitState === "error" ? COLOR.redSoft : COLOR.text2,
+            background: submitError != null ? "rgba(239,68,68,0.08)" : COLOR.surface,
+            color: submitError != null ? COLOR.redSoft : COLOR.text2,
             fontSize: 12,
           }}
         >
-          {submitMessage}
+          {statusMessage}
         </div>
       ) : null}
 
       <div style={{ height: 18 }} />
-      <APrimary onClick={onSubmit} disabled={disabled}>
-        {submitState === "signing"
+      <APrimary onClick={() => void onSubmit()} disabled={disabled}>
+        {txStatus === "preparing" || txStatus === "signing"
           ? "Sign in your wallet…"
-          : submitState === "submitting"
+          : busy
             ? "Submitting…"
             : isT3rminal ? "Register T3rminal" : "Register terminal"}
       </APrimary>

@@ -10,16 +10,18 @@ export function PasskeyInput({
   onChange,
   show,
   onToggle,
+  placeholder = "passkey",
 }: {
   value: string;
   onChange: (v: string) => void;
   show: boolean;
   onToggle: () => void;
+  placeholder?: string;
 }) {
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
       <div style={{ flex: 1 }}>
-        <AInput value={value} onChange={onChange} placeholder="passkey" type={show ? "text" : "password"} />
+        <AInput value={value} onChange={onChange} placeholder={placeholder} type={show ? "text" : "password"} />
       </div>
       <button
         type="button"

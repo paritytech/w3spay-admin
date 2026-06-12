@@ -73,7 +73,7 @@ export function ReportTerminalRow({ m, index, hasAssignment, onClick }: ReportTe
           </div>
           {!hasAssignment ? (
             <div style={{ marginTop: 6, fontSize: 10.5, color: COLOR.amberSoft }}>
-              No QR issued — reports can be listed but not decrypted from here.
+              No QR issued — open to unlock with the report passcode.
             </div>
           ) : null}
         </div>

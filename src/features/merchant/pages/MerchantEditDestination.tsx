@@ -3,9 +3,12 @@
 
 import { useEffect, useState } from "react";
 
+import { useSetMerchantDestination } from "@features/merchant/contracts/merchant-mutations.ts";
 import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
-import { useMerchantWriteOps } from "@features/merchant/contracts/use-merchant-write-ops.ts";
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
+import type { TxStatus } from "@/shared/chain/contracts";
+import { transactionToastMessage } from "@shared/utils/transaction-toast.ts";
+import { normalizeMerchantDestinationInput, type AccountId32Hex } from "@shared/lib/address.ts";
 import { type AdminMerchant, shortAddr } from "@features/merchant/merchant-model.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import {
@@ -23,19 +26,22 @@ export interface MerchantEditDestinationProps {
 }
 
 export function MerchantEditDestination({ m }: MerchantEditDestinationProps) {
-  const { writes } = useMerchantWriteOps();
+  const rotateDestination = useSetMerchantDestination();
   const navigate = useNavigate();
   const router = useRouter();
   const canGoBack = useCanGoBack();
 
   const [destination, setDestination] = useState<string>(() => m?.destinationSs58 ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [txStatus, setTxStatus] = useState<TxStatus | null>(null);
 
+  const resetMutation = rotateDestination.reset;
   useEffect(() => {
     setDestination(m?.destinationSs58 ?? "");
     setError(null);
-    writes.resetSubmit();
-  }, [m?.key, m?.destinationSs58, writes.resetSubmit]);
+    setTxStatus(null);
+    resetMutation();
+  }, [m?.key, m?.destinationSs58, resetMutation]);
 
   if (m == null) {
     return (
@@ -50,20 +56,48 @@ export function MerchantEditDestination({ m }: MerchantEditDestinationProps) {
     );
   }
 
-  const { submitState, submitMessage } = writes;
-  const inFlight = submitState === "signing" || submitState === "submitting";
+  const busy = rotateDestination.isPending;
   const trimmed = destination.trim();
-  const disabled = trimmed === "" || inFlight;
+  const disabled = trimmed === "" || busy;
+  const submitError = rotateDestination.error;
+  const statusMessage =
+    submitError != null
+      ? submitError.message
+      : txStatus != null
+        ? transactionToastMessage(txStatus)
+        : null;
 
   const onBack = () =>
     canGoBack
       ? router.history.back()
       : navigate({ to: "/merchants/$merchantKey", params: { merchantKey: m.key } });
 
-  const onSubmit = () => {
-    void writes.setMerchantDestination(m, destination, setError).then((ok) => {
-      if (ok) navigate({ to: "/merchants/$merchantKey", params: { merchantKey: m.key } });
-    });
+  const onSubmit = async () => {
+    let destinationAccountId: AccountId32Hex;
+    try {
+      destinationAccountId = normalizeMerchantDestinationInput(trimmed);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+      return;
+    }
+    if (destinationAccountId.toLowerCase() === m.destinationAccountId.toLowerCase()) {
+      setError("That's already the current destination.");
+      return;
+    }
+    setError(null);
+    setTxStatus("preparing");
+    try {
+      await rotateDestination.mutateAsync({
+        payload: { merchantId: m.merchantId, terminalId: m.terminalId, destinationAccountId },
+        onStatus: setTxStatus,
+      });
+    } catch {
+      // Surfaced via rotateDestination.error.
+      return;
+    } finally {
+      setTxStatus(null);
+    }
+    navigate({ to: "/merchants/$merchantKey", params: { merchantKey: m.key } });
   };
 
   return (
@@ -162,27 +196,27 @@ export function MerchantEditDestination({ m }: MerchantEditDestinationProps) {
         </div>
       </div>
 
-      {submitMessage ? (
+      {statusMessage ? (
         <div
           style={{
             marginTop: 10,
             padding: "10px 12px",
-            border: `1px solid ${submitState === "error" ? COLOR.red : COLOR.border}`,
+            border: `1px solid ${submitError != null ? COLOR.red : COLOR.border}`,
             borderRadius: 12,
-            background: submitState === "error" ? "rgba(239,68,68,0.08)" : COLOR.surface,
-            color: submitState === "error" ? COLOR.redSoft : COLOR.text2,
+            background: submitError != null ? "rgba(239,68,68,0.08)" : COLOR.surface,
+            color: submitError != null ? COLOR.redSoft : COLOR.text2,
             fontSize: 12,
           }}
         >
-          {submitMessage}
+          {statusMessage}
         </div>
       ) : null}
 
       <div style={{ height: 18 }} />
-      <APrimary onClick={onSubmit} disabled={disabled}>
-        {submitState === "signing"
+      <APrimary onClick={() => void onSubmit()} disabled={disabled}>
+        {txStatus === "preparing" || txStatus === "signing"
           ? "Sign in your wallet…"
-          : submitState === "submitting"
+          : busy
             ? "Submitting…"
             : "Rotate destination"}
       </APrimary>

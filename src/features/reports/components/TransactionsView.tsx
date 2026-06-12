@@ -229,8 +229,8 @@ function MissingPasswordBanner({
         QR password
       </div>
       <div style={{ color: COLOR.text3 }}>
-        Their daily reports are listed but cannot be decrypted from this
-        console. Issue a QR per terminal from{" "}
+        Their daily reports are listed but cannot be decrypted yet. Open each
+        terminal's reports page to unlock with its passcode, or issue a QR from{" "}
         <span style={{ color: COLOR.text2 }}>Configure T3rminal</span>:
       </div>
       <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 6 }}>

@@ -12,10 +12,7 @@ import {
 import { resolveRegistryAddress } from "@shared/chain/merchant-registry-write.ts";
 import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
 import { queryKeys } from "@shared/chain/keys.ts";
-
-// Poll every 5s so each admin device converges on configs another device
-// published.
-const PROCESSOR_CONFIG_REGISTRY_POLL_MS = 5_000;
+import { REGISTRY_POLL_MS } from "@shared/chain/query-client.ts";
 
 export function processorConfigRegistryConfigured(): boolean {
   return envConfig.contracts.merchantRegistryAddress.trim() !== "";
@@ -43,6 +40,6 @@ export function processorConfigRegistryQueryOptions() {
         : withSpan("w3spay-admin:processor-config-registry.list", "chain.read", () =>
             listProcessorConfigRecords(resolveRegistryAddress()),),
     enabled: isDemoMode() || processorConfigRegistryConfigured(),
-    refetchInterval: PROCESSOR_CONFIG_REGISTRY_POLL_MS,
+    refetchInterval: REGISTRY_POLL_MS,
   });
 }

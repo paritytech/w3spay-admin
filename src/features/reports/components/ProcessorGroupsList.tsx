@@ -17,12 +17,19 @@ import {
   processorConfigRegistryConfigured,
   processorConfigRegistryQueryOptions,
 } from "@features/payment-processors/contracts/processor-config-queries.ts";
+import { processorListViewState } from "@features/payment-processors/payment-processor-model.ts";
 import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
 
 export function ProcessorGroupsList() {
   const navigate = useNavigate();
   const query = useQuery(processorConfigRegistryQueryOptions());
   const rows = query.data ?? [];
+  const view = processorListViewState({
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    rowCount: rows.length,
+  });
 
   if (!processorConfigRegistryConfigured() && !isDemoMode()) {
     return (
@@ -36,11 +43,21 @@ export function ProcessorGroupsList() {
     );
   }
 
-  if (rows.length === 0) {
+  if (view.kind === "error") {
+    return (
+      <ACard padding={14}>
+        <div style={{ fontSize: 12, color: COLOR.redSoft, lineHeight: 1.55 }}>
+          Couldn't load payment-processor groups from the registry: {view.message}
+        </div>
+      </ACard>
+    );
+  }
+
+  if (view.kind !== "rows") {
     return (
       <ACard padding={18}>
         <div style={{ fontSize: 13, color: COLOR.muted, lineHeight: 1.5 }}>
-          {query.isLoading ? "Loading payment-processor groups…" : "No payment-processor groups published yet."}
+          {view.kind === "skeleton" ? "Loading payment-processor groups…" : "No payment-processor groups published yet."}
         </div>
       </ACard>
     );

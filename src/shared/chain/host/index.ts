@@ -5,6 +5,7 @@ export * from "./networks.ts";
 export * from "./connection.ts";
 export * from "./client.ts";
 export * from "./guarded-signer.ts";
+export * from "./resume-recovery.ts";
 export * from "./host-tx-signer.ts";
 export * from "./standalone-tx-signer.ts";
 export * from "./host-api.ts";

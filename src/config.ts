@@ -26,7 +26,7 @@ function readEnv(): EnvConfig {
 
   return {
     contracts: {
-      merchantRegistryAddress: envString("VITE_W3SPAY_REGISTRY_ADDRESS", "0x34a4eb4a676ab25ec78241d396267484064541a5"),
+      merchantRegistryAddress: envString("VITE_W3SPAY_REGISTRY_ADDRESS", "0xff3b3e8cc1c6bc8a67ae933dc238595c2cc6402b"),
       // Default is the Bulletin index contract address on Paseo Asset Hub
       // Next v2 (the chain the report producer writes to).
       t3rminalBulletinIndexAddress: envString(
