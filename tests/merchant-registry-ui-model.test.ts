@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildRegisterMerchant,
   computeTerminalKey,
   defaultT3rminalDisplayName,
   merchantFromRegistryRow,
@@ -8,6 +9,7 @@ import {
   shortTerminalId,
   T3RMINAL_TERMINAL_ID_PREFIX,
   t3rminalTerminalIdForDestination,
+  type MerchantForm,
   type RegistryMerchantRow,
 } from "@features/merchant/merchant-model.ts";
 
@@ -135,5 +137,89 @@ describe("shortTerminalId", () => {
   it("falls back to shortAddr truncation for non-t3r- ids (POS terminals)", () => {
     const pos = "funkhaus-bar-east-01-some-extra-long-identifier";
     expect(shortTerminalId(pos)).toBe(`funkhaus\u2026tifier`);
+  });
+});
+
+describe("buildRegisterMerchant", () => {
+  const form = (overrides: Partial<MerchantForm> = {}): MerchantForm => ({
+    terminalId: "bar-east-01",
+    merchantId: "funkhaus",
+    displayName: "Bar East",
+    destination: ACCOUNT_ID32,
+    ...overrides,
+  });
+
+  it("builds a pos payload with trimmed fields and the derived terminal key", () => {
+    const input = buildRegisterMerchant(
+      form({ merchantId: " funkhaus ", terminalId: " bar-east-01 " }),
+      [],
+      "pos",
+    );
+    expect(input).toMatchObject({
+      ok: true,
+      payload: {
+        merchantId: "funkhaus",
+        terminalId: "bar-east-01",
+        destinationAccountId: ACCOUNT_ID32,
+        displayName: "Bar East",
+      },
+      terminalKey: computeTerminalKey("funkhaus", "bar-east-01"),
+    });
+  });
+
+  it("derives the t3rminal terminalId and default display name from the destination", () => {
+    const input = buildRegisterMerchant(form({ terminalId: "", displayName: "" }), [], "t3rminal");
+    expect(input).toMatchObject({
+      ok: true,
+      payload: {
+        terminalId: t3rminalTerminalIdForDestination(ACCOUNT_ID32),
+        displayName: defaultT3rminalDisplayName(ACCOUNT_ID32),
+      },
+    });
+  });
+
+  it("normalizes an SS58 destination to AccountId32 hex", () => {
+    const ss58 = merchantFromRegistryRow(row()).destinationSs58;
+    const input = buildRegisterMerchant(form({ destination: ss58 }), [], "pos");
+    expect(input.ok && input.payload.destinationAccountId).toBe(ACCOUNT_ID32);
+  });
+
+  it("rejects a duplicate (merchantId, terminalId) pair on the terminalId field for pos", () => {
+    const existing = [merchantFromRegistryRow(row())];
+    const input = buildRegisterMerchant(form(), existing, "pos");
+    expect(input.ok).toBe(false);
+    expect(!input.ok && input.errors.terminalId).toMatch(/already registered/);
+  });
+
+  it("rejects a duplicate t3rminal destination on the destination field", () => {
+    const terminalId = t3rminalTerminalIdForDestination(ACCOUNT_ID32);
+    const existing = [merchantFromRegistryRow(row({ terminalId }))];
+    const input = buildRegisterMerchant(form(), existing, "t3rminal");
+    expect(input.ok).toBe(false);
+    expect(!input.ok && input.errors.destination).toMatch(/already registered/);
+  });
+
+  it("allows the same terminalId under a different merchant", () => {
+    const existing = [merchantFromRegistryRow(row({ merchantId: "other" }))];
+    expect(buildRegisterMerchant(form(), existing, "pos").ok).toBe(true);
+  });
+
+  it("rejects an unparseable destination", () => {
+    const input = buildRegisterMerchant(form({ destination: "not-an-address" }), [], "pos");
+    expect(input.ok).toBe(false);
+    expect(!input.ok && input.errors.destination).toBeTruthy();
+  });
+
+  it("accumulates field errors for blank merchantId and terminalId", () => {
+    const input = buildRegisterMerchant(
+      form({ merchantId: "", terminalId: "  " }),
+      [],
+      "pos",
+    );
+    expect(input.ok).toBe(false);
+    expect(!input.ok && input.errors).toMatchObject({
+      merchantId: "Required.",
+      terminalId: "Required.",
+    });
   });
 });

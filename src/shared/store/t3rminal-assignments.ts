@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // @paritytech
 
-import { bytesToHex, hexToBytes } from "@shared/lib/address.ts";
+import { bytesToHex } from "@shared/lib/address.ts";
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import type { Item, ItemConfig } from "@features/items/items-model.ts";
 import {
   T3RMINAL_REPORT_PASSWORD_SCHEME_V1,
-  createPasswordSeed,
+  deriveReportPasswordFromPasscode,
 } from "@shared/lib/t3rminal-config-qr.ts";
 
 /** Stable storage key under the admin app's KV prefix. */
@@ -24,8 +24,11 @@ export interface T3rminalAssignmentV1 {
   readonly receivingAddress: string;
   readonly passwordScheme: "admin-public-key-sha256-v1";
   readonly reportPassword: string;
-  /** Hex-encoded random salt used to derive `reportPassword`. */
-  readonly passwordSaltHex: `0x${string}`;
+  /**
+   * Hex-encoded random salt for legacy random-password records. Absent on
+   * passcode-derived records — the passcode alone reproduces the password.
+   */
+  readonly passwordSaltHex?: `0x${string}`;
   /** SS58 of the admin product account that signed the publish. */
   readonly adminPublicKeyHex: `0x${string}`;
   readonly issuedAt: string;
@@ -83,12 +86,13 @@ function decodeAssignment(value: unknown): T3rminalAssignmentV1 | null {
     typeof r.itemConfigCid !== "string" ||
     typeof r.receivingAddress !== "string" ||
     typeof r.reportPassword !== "string" ||
-    typeof r.passwordSaltHex !== "string" ||
     typeof r.adminPublicKeyHex !== "string" ||
     typeof r.issuedAt !== "string"
   ) {
     return null;
   }
+  // Salt is present only on legacy random-password records; validate when present.
+  if (r.passwordSaltHex !== undefined && typeof r.passwordSaltHex !== "string") return null;
   if (r.passwordScheme !== "admin-public-key-sha256-v1") return null;
   const payloadVersion = r.payloadVersion === 2 ? 2 : r.payloadVersion === 1 ? 1 : undefined;
   return {
@@ -98,7 +102,9 @@ function decodeAssignment(value: unknown): T3rminalAssignmentV1 | null {
     receivingAddress: r.receivingAddress,
     passwordScheme: r.passwordScheme,
     reportPassword: r.reportPassword,
-    passwordSaltHex: r.passwordSaltHex as `0x${string}`,
+    ...(r.passwordSaltHex !== undefined
+      ? { passwordSaltHex: r.passwordSaltHex as `0x${string}` }
+      : {}),
     adminPublicKeyHex: r.adminPublicKeyHex as `0x${string}`,
     issuedAt: r.issuedAt,
     ...(payloadVersion !== undefined ? { payloadVersion } : {}),
@@ -110,13 +116,10 @@ export function itemSummaryFor(items: ReadonlyArray<Item>): { count: number; sam
   return { count: items.length, sampleNames: items.slice(0, 3).map((i) => i.name) };
 }
 
-export const saltToHex = (bytes: Uint8Array): `0x${string}` => bytesToHex(bytes);
-export const hexToSalt = (hex: `0x${string}`): Uint8Array => hexToBytes(hex);
-
 /**
  * Mints (or refreshes) an assignment record from the resolved building blocks.
- * Reuses `existing` password/salt unless `regeneratePassword`. Pure (no React)
- * so the password-preservation contract is unit-testable.
+ * A non-null `passcode` derives a fresh `reportPassword`; `null` keeps the
+ * existing record's password. Pure (no React) so the contract is unit-testable.
  */
 export interface MintAssignmentArgs {
   readonly merchant: AdminMerchant;
@@ -124,7 +127,8 @@ export interface MintAssignmentArgs {
   readonly itemConfigCid: string;
   readonly adminPublicKey: Uint8Array;
   readonly existing: T3rminalAssignmentV1 | null;
-  readonly regeneratePassword: boolean;
+  /** Trimmed admin-defined passcode; `null` keeps the existing password. */
+  readonly passcode: string | null;
   readonly nowIso: string;
   /** Wire format for the minted QR. Defaults to v2 (BCTS UR + dCBOR). */
   readonly payloadVersion?: 1 | 2;
@@ -132,14 +136,15 @@ export interface MintAssignmentArgs {
 
 export function mintAssignmentRecord(args: MintAssignmentArgs): T3rminalAssignmentV1 {
   let reportPassword: string;
-  let passwordSaltHex: `0x${string}`;
-  if (args.existing && !args.regeneratePassword) {
+  let passwordSaltHex: `0x${string}` | undefined;
+  if (args.passcode != null) {
+    reportPassword = deriveReportPasswordFromPasscode(args.passcode);
+    passwordSaltHex = undefined;
+  } else if (args.existing) {
     reportPassword = args.existing.reportPassword;
     passwordSaltHex = args.existing.passwordSaltHex;
   } else {
-    const seed = createPasswordSeed(args.adminPublicKey);
-    reportPassword = seed.password;
-    passwordSaltHex = bytesToHex(seed.salt);
+    throw new Error("No passcode given and no existing password to keep");
   }
   return {
     merchantKey: args.merchant.key,
@@ -148,7 +153,7 @@ export function mintAssignmentRecord(args: MintAssignmentArgs): T3rminalAssignme
     receivingAddress: args.merchant.destinationSs58,
     passwordScheme: T3RMINAL_REPORT_PASSWORD_SCHEME_V1,
     reportPassword,
-    passwordSaltHex,
+    ...(passwordSaltHex !== undefined ? { passwordSaltHex } : {}),
     adminPublicKeyHex: bytesToHex(args.adminPublicKey),
     issuedAt: args.nowIso,
     payloadVersion: args.payloadVersion ?? 2,
@@ -161,8 +166,8 @@ export interface UpsertAssignmentArgs {
   readonly config: ItemConfig;
   readonly itemConfigCid: string;
   readonly adminPublicKey: Uint8Array;
-  /** When true, replace the existing salt + password. */
-  readonly regeneratePassword?: boolean;
+  /** Trimmed admin-defined passcode; `null` keeps the existing password. */
+  readonly passcode: string | null;
   /** ISO timestamp; threaded in so tests can pin it. */
   readonly nowIso: string;
   /** Optional override for the QR wire format; defaults to v2. */

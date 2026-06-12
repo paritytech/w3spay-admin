@@ -25,7 +25,7 @@ export function usePeopleClient() {
   if (!people || people.genesisHash === "") return null;
   const client = getOrCreateClient(
     people.genesisHash as `0x${string}`,
-    people.wsUrl
+    people.wsUrl,
   );
   return {
     client,

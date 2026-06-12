@@ -29,7 +29,7 @@ afterEach(() => {
 describe("daily-report fetch semaphore", () => {
   it("caps concurrent IPFS fetches at MAX_CONCURRENCY", async () => {
     const jobs = Array.from({ length: 20 }, (_, i) =>
-      loadDailyReport(`cid-${i}`, "password", "https://gateway.example"),
+      loadDailyReport(`cid-${i}`, ["password"], "https://gateway.example"),
     );
     const results = await Promise.all(jobs);
 

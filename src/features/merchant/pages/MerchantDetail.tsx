@@ -4,12 +4,14 @@
 import { useEffect, useState } from "react";
 
 import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
-import { useMerchantWriteOps } from "@features/merchant/contracts/use-merchant-write-ops.ts";
+import { useDeleteMerchant, useSetMerchantStatus } from "@features/merchant/contracts/merchant-mutations.ts";
+import { useFeedbackStore } from "@shared/store/use-feedback-store.ts";
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   formatIsoDateTime,
   timeAgoFromIso,
   type AdminMerchant,
+  type MerchantLifecycle,
 } from "@features/merchant/merchant-model.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import {
@@ -22,7 +24,7 @@ import {
 import { CopyableRow } from "@shared/components/CopyableRow.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
 import { PayoutBlock } from "@features/merchant/components/merchant-detail/PayoutBlock.tsx";
-import { StatusActions } from "@features/merchant/components/merchant-detail/StatusActions.tsx";
+import { StatusActions, type StatusActionKind } from "@features/merchant/components/merchant-detail/StatusActions.tsx";
 
 export type { StatusActionKind } from "@features/merchant/components/merchant-detail/StatusActions.tsx";
 
@@ -40,7 +42,9 @@ export interface MerchantDetailProps {
 }
 
 export function MerchantDetail({ m, onBack, pendingLookup }: MerchantDetailProps) {
-  const { writes } = useMerchantWriteOps();
+  const statusMutation = useSetMerchantStatus();
+  const deleteMutation = useDeleteMerchant();
+  const showToast = useFeedbackStore((s) => s.showToast);
   const navigate = useNavigate();
 
   if (!m) {
@@ -55,6 +59,39 @@ export function MerchantDetail({ m, onBack, pendingLookup }: MerchantDetailProps
       </>
     );
   }
+
+  const writeInFlight = statusMutation.isPending || deleteMutation.isPending;
+
+  const onSetStatus = async (action: StatusActionKind, target: MerchantLifecycle) => {
+    try {
+      await statusMutation.mutateAsync({
+        payload: { merchantId: m.merchantId, terminalId: m.terminalId, status: target },
+      });
+    } catch (caught) {
+      showToast(`Status update failed: ${caught instanceof Error ? caught.message : String(caught)}`, "warn");
+      return;
+    }
+    const label =
+      action === "pause" ? "Paused"
+      : action === "resume" ? "Resumed"
+      : action === "revoke" ? "Revoked"
+      : "Reinstated";
+    showToast(`${label} ${m.name}`, action === "revoke" ? "warn" : "ok");
+  };
+
+  const onDelete = async () => {
+    try {
+      await deleteMutation.mutateAsync({
+        payload: { merchantId: m.merchantId, terminalId: m.terminalId },
+      });
+    } catch (caught) {
+      showToast(`Delete failed: ${caught instanceof Error ? caught.message : String(caught)}`, "warn");
+      return;
+    }
+    // Deletion is permanent (row removed, not flagged) — warn tone keeps it distinct from a benign success.
+    showToast(`Deleted ${m.name}`, "warn");
+    onBack();
+  };
 
   return (
     <>
@@ -155,13 +192,9 @@ export function MerchantDetail({ m, onBack, pendingLookup }: MerchantDetailProps
       <AEye>Actions</AEye>
       <StatusActions
         status={m.status}
-        writeInFlight={writes.writeInFlight}
-        onSetStatus={(action, target) => void writes.setMerchantStatus(m, action, target)}
-        onDelete={() =>
-          void writes.deleteMerchant(m).then((ok) => {
-            if (ok) onBack();
-          })
-        }
+        writeInFlight={writeInFlight}
+        onSetStatus={(action, target) => void onSetStatus(action, target)}
+        onDelete={() => void onDelete()}
       />
     </>
   );

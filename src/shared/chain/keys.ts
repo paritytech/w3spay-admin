@@ -25,10 +25,11 @@ export const queryKeys = {
 
   tokenBalances: (sortedKey: string) => ["token-balances", sortedKey] as const,
 
-  decryptedReport: (cid: string) => ["decrypted-report", cid] as const,
+  decryptedReport: (cid: string, unlockNonce: number) =>
+    ["decrypted-report", cid, unlockNonce] as const,
 
-  dailyReport: (shopKey: string, date: string) =>
-    ["daily-report", shopKey.toLowerCase(), date] as const,
+  dailyReport: (shopKey: string, date: string, unlockNonce: number) =>
+    ["daily-report", shopKey.toLowerCase(), date, unlockNonce] as const,
 
   processorReportIndex: (groupId: string) => ["processor-report-index", groupId] as const,
 

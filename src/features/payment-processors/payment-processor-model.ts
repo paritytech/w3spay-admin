@@ -183,3 +183,36 @@ export function validateProcessorForm(form: ProcessorConfigForm): string | null 
   }
   return null;
 }
+
+// ===================== List view state =====================
+
+/** What the processor-config list surfaces should render. */
+export type ProcessorListViewState =
+  | { kind: "skeleton" }
+  | { kind: "error"; message: string }
+  | { kind: "empty" }
+  | { kind: "rows" };
+
+/**
+ * Pure render-state discriminator for the registry list query. Order matters:
+ * stale rows beat a background refetch error (the poll heals transient
+ * failures), an error beats the empty card (an unreachable registry is NOT
+ * "no configs published" — rendering it as empty hides outages and
+ * wrong-registry builds), and only a settled, error-free, zero-row query is
+ * genuinely empty.
+ */
+export function processorListViewState(query: {
+  readonly isLoading: boolean;
+  readonly isError: boolean;
+  readonly error: unknown;
+  readonly rowCount: number;
+}): ProcessorListViewState {
+  if (query.rowCount > 0) return { kind: "rows" };
+  if (query.isError) {
+    const message =
+      query.error instanceof Error ? query.error.message : String(query.error);
+    return { kind: "error", message };
+  }
+  if (query.isLoading) return { kind: "skeleton" };
+  return { kind: "empty" };
+}

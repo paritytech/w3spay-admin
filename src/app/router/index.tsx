@@ -19,6 +19,7 @@ import { queryClient } from "@shared/chain/query-client.ts";
 import { RootLayout } from "./layouts.tsx";
 import { AuthedLayout } from "./guards.tsx";
 import { AdminAccountCard, AdminManagementCard } from "@features/session/pages/AdminAccess.tsx";
+import { NetworkTransportCard } from "@features/session/components/NetworkTransportCard.tsx";
 import { Balances } from "@features/balances/pages/Balances.tsx";
 import { ConfigureT3rminalRoute } from "@features/merchant/pages/ConfigureT3rminal.tsx";
 import { ItemsTab } from "@features/items/pages/ItemsTab.tsx";
@@ -260,6 +261,8 @@ const accountRoute = createRoute({
     return (
       <>
         <AdminAccountCard identity={readyAccount} title="Signed-in admin account" />
+        <div style={{ height: 12 }} />
+        <NetworkTransportCard />
         {isSuperAdmin.granted ? (
           <>
             <div style={{ height: 12 }} />

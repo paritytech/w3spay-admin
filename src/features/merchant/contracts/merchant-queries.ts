@@ -13,7 +13,7 @@ import type { RegistryMerchantRow } from "@features/merchant/merchant-model.ts";
 import { getDemoMerchantRows } from "@shared/lib/demo/demo-merchant-registry.ts";
 import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
 import { queryKeys, queryRoots } from "@shared/chain/keys.ts";
-import { queryClient } from "@shared/chain/query-client.ts";
+import { queryClient, REGISTRY_POLL_MS } from "@shared/chain/query-client.ts";
 
 const REGISTRY_NOT_CONFIGURED = "VITE_W3SPAY_REGISTRY_ADDRESS is not configured.";
 
@@ -32,6 +32,7 @@ export function merchantRegistryQueryOptions() {
             listMerchantEntries(resolveRegistryAddress()),),
     // A real empty address is surfaced as a config-error, not a failed fetch.
     enabled: isDemoMode() || merchantRegistryConfigured(),
+    refetchInterval: REGISTRY_POLL_MS,
   });
 }
 

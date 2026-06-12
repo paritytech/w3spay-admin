@@ -11,7 +11,6 @@ import type {
   DailyReportTransaction,
 } from "@features/reports/daily-report.ts";
 import type { ReportIndexEntry } from "@features/reports/contracts/bulletin-index-read.ts";
-import type { T3rminalAssignmentV1 } from "@shared/store/t3rminal-assignments.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import {
   ACard,
@@ -26,15 +25,17 @@ import { exportFile } from "@shared/utils/export-file.ts";
 
 export interface ReportDetailPanelProps {
   readonly entry: ReportIndexEntry;
-  readonly assignment: T3rminalAssignmentV1 | null;
+  readonly passwords: ReadonlyArray<string>;
+  readonly unlockNonce: number;
   readonly onClose: () => void;
 }
 
-export function ReportDetailPanel({ entry, assignment, onClose }: ReportDetailPanelProps) {
+export function ReportDetailPanel({ entry, passwords, unlockNonce, onClose }: ReportDetailPanelProps) {
   const gatewayBase = resolveNetwork(envConfig.chain.network).ipfsGateway;
   const state = useDecryptedReport({
     cid: entry.metadata.cid,
-    reportPassword: assignment?.reportPassword ?? null,
+    passwords,
+    unlockNonce,
     gatewayBase,
   });
 
@@ -71,7 +72,7 @@ export function ReportDetailPanel({ entry, assignment, onClose }: ReportDetailPa
 
       <ADotted margin={14} />
 
-      {assignment == null ? (
+      {passwords.length === 0 ? (
         <div
           style={{
             padding: 10,
@@ -83,9 +84,8 @@ export function ReportDetailPanel({ entry, assignment, onClose }: ReportDetailPa
             marginBottom: 12,
           }}
         >
-          No QR password on file for this terminal. Issue a QR from “Configure
-          T3rminal” first — without it the admin cannot decrypt this terminal's
-          reports.
+          Enter the report passcode above, or scan a Configure T3rminal QR from
+          this device, to decrypt this terminal's reports.
         </div>
       ) : null}
 
@@ -109,7 +109,10 @@ export function ReportDetailPanel({ entry, assignment, onClose }: ReportDetailPa
           headline="Decryption failed"
           detail={
             state.reason +
-            " — wrong password or corrupted ciphertext. Regenerating the QR will rotate the password and break older reports."
+            " — wrong passcode or corrupted ciphertext. Days uploaded under an older passcode need that passcode." +
+            (state.meta.keyFingerprint
+              ? ` Report key fingerprint: ${state.meta.keyFingerprint}.`
+              : "")
           }
         />
       ) : state.kind === "parse-error" ? (

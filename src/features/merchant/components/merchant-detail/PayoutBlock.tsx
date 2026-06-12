@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // @paritytech
 
-import { useCanWriteMerchants } from "@features/merchant/contracts/use-merchant-write-ops.ts";
+import { useCanWriteMerchants } from "@features/merchant/contracts/merchant-mutations.ts";
 import { useNavigate } from "@tanstack/react-router";
 import { type AdminMerchant } from "@features/merchant/merchant-model.ts";
 import { Icon } from "@shared/components/Icon.tsx";

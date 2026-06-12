@@ -24,7 +24,7 @@ export interface GuardedHostSignerDeps {
  * hosts answer it at any point in the session. ANY settle (ok or error)
  * proves the bridge delivers both ways; only silence means a dead channel.
  */
-function pingHostBridge(timeoutMs: number): Promise<boolean> {
+export function pingHostBridge(timeoutMs: number): Promise<boolean> {
   const { promise, resolve } = Promise.withResolvers<boolean>();
   const timer = setTimeout(() => resolve(false), timeoutMs);
   const settle = () => {

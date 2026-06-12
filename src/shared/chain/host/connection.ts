@@ -400,33 +400,12 @@ export function __resetHostConnectionForTests(): void {
   accountsProvider = null;
   injectedExtension = null;
   inFlightInject = null;
-  allocationOutcomes.clear();
-  inFlightAllocations.clear();
   remoteOriginOutcomes.clear();
   inFlightRemoteOrigins.clear();
 }
 
-/**
- * Extend as the host's `AllocatableResource` enum grows; new variants
- * should be added here AND to `isResourceAllowanceKind`'s narrowing.
- */
-export type ResourceAllowanceKind =
-  | "BulletInAllowance"
-  | "SmartContractAllowance:0"
-  | "AutoSigning"
-  | "PreimageSubmit";
-
-export function isResourceAllowanceKind(value: string): value is ResourceAllowanceKind {
-  return (
-    value === "BulletInAllowance" ||
-    value === "SmartContractAllowance:0" ||
-    value === "AutoSigning" ||
-    value === "PreimageSubmit"
-  );
-}
 
 export interface ResourceAllowanceOutcome {
-  kind: ResourceAllowanceKind;
   granted: boolean;
   error?: string;
 }
@@ -502,119 +481,36 @@ export function isHostWalletInjected(): boolean {
   return injectedExtension === true;
 }
 
-/**
- * Per-page-lifetime cache of `hostApi.requestResourceAllocation` outcomes.
- * Keyed by resource kind so repeated claims (e.g. a hook re-running) are
- * instant and don't re-prompt the host modal.
- */
-const allocationOutcomes = new Map<ResourceAllowanceKind, ResourceAllowanceOutcome>();
-const inFlightAllocations = new Map<ResourceAllowanceKind, Promise<ResourceAllowanceOutcome>>();
-
 /** Wall-clock budget for a single claim. The allocation modal is user-interactive. */
 export const ALLOC_TIMEOUT_MS = 120_000;
 
-function buildAllocationRequest(kind: ResourceAllowanceKind): unknown {
-  switch (kind) {
-    case "BulletInAllowance":
-      return enumValue("BulletInAllowance", undefined);
-    case "SmartContractAllowance:0":
-      return enumValue("SmartContractAllowance", 0);
-    case "AutoSigning":
-      return enumValue("AutoSigning", undefined);
-    case "PreimageSubmit":
-      return enumValue("PreimageSubmit", undefined);
-    default: {
-      const _exhaustive: never = kind;
-      throw new Error(`Unknown resource allowance: ${String(_exhaustive)}`);
-    }
+/**
+ * Interpret the host's `requestResourceAllocation` success payload. The
+ * host returns a `Vector<AllocationOutcome>` — one entry per requested
+ * resource — so the value is an ARRAY, not a single tagged enum. We claim
+ * one kind per call, so only the first entry is meaningful.
+ *
+ * `Rejected` / `NotAvailable` are the host's explicit denials. `Allocated`
+ * — or any unrecognized/legacy shape — is treated as granted (permissive,
+ * matching the prior fallback so a protocol bump can't silently wedge
+ * signing).
+ */
+export function interpretAllocationOutcome(value: unknown): {
+  granted: boolean;
+  error?: string;
+} {
+  const outcomes = Array.isArray(value) ? value : [value];
+  const first = outcomes[0];
+  const tag =
+    first !== null && typeof first === "object" && "tag" in first
+      ? String((first as { tag: unknown }).tag)
+      : undefined;
+  if (tag === "Rejected" || tag === "NotAvailable") {
+    return { granted: false, error: tag };
   }
+  return { granted: true };
 }
 
-function claimOneAllowance(
-  kind: ResourceAllowanceKind,
-  timeoutMs: number,
-): Promise<ResourceAllowanceOutcome> {
-  const cached = allocationOutcomes.get(kind);
-  if (cached !== undefined) {
-    // eslint-disable-next-line no-console
-    console.info(`[host] claimAllowance(${kind}): cached ${cached.granted ? "granted" : `denied (${cached.error})`}`);
-    return Promise.resolve(cached);
-  }
-  const inFlight = inFlightAllocations.get(kind);
-  if (inFlight !== undefined) {
-    // eslint-disable-next-line no-console
-    console.info(`[host] claimAllowance(${kind}): in-flight; sharing existing promise`);
-    return inFlight;
-  }
-  // eslint-disable-next-line no-console
-  console.info(
-    `[host] claimAllowance(${kind}): starting hostApi.requestResourceAllocation (${timeoutMs}ms budget)`,
-  );
-  const startedAt = Date.now();
-  const promise = (async () => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<ResourceAllowanceOutcome>((resolve) => {
-      timer = setTimeout(
-        () => resolve({ kind, granted: false, error: `claimAllowance(${kind}) timed out after ${timeoutMs}ms` }),
-        timeoutMs,
-      );
-    });
-    const call = (async () => {
-      try {
-        const result = await runExclusiveHostModal(() =>
-          Promise.resolve(
-            hostApi.requestResourceAllocation(
-              enumValue("v1", [buildAllocationRequest(kind)]) as unknown as Parameters<
-                typeof hostApi.requestResourceAllocation
-              >[0],
-            ),
-          ),
-        );
-        return await new Promise<ResourceAllowanceOutcome>((resolve) => {
-          result.match(
-            (response) => {
-              const v = (response as unknown as { tag: string; value: unknown }).value;
-              if (v && typeof v === "object" && "tag" in (v as Record<string, unknown>)) {
-                const tag = String((v as { tag: unknown }).tag);
-                if (tag === "Ok" || tag === "AlreadyGranted") {
-                  resolve({ kind, granted: true });
-                } else {
-                  resolve({ kind, granted: false, error: tag });
-                }
-              } else {
-                // Unknown shape — treat as granted.
-                resolve({ kind, granted: true });
-              }
-            },
-            (err) => {
-              const reason =
-                (err as { payload?: { reason?: string } })?.payload?.reason ?? "unknown";
-              resolve({ kind, granted: false, error: reason });
-            },
-          );
-        });
-      } catch (caught) {
-        const reason = caught instanceof Error ? caught.message : String(caught);
-        return { kind, granted: false, error: reason };
-      }
-    })();
-    const outcome = await Promise.race([call, timeout]);
-    if (timer !== undefined) clearTimeout(timer);
-    allocationOutcomes.set(kind, outcome);
-    return outcome;
-  })();
-  inFlightAllocations.set(kind, promise);
-  void promise.then((outcome) => {
-    const elapsed = Date.now() - startedAt;
-    // eslint-disable-next-line no-console
-    console.info(
-      `[host] claimAllowance(${kind}): ${outcome.granted ? "granted" : `denied (${outcome.error ?? "unknown"})`} (${elapsed}ms)`,
-    );
-  });
-  return promise.finally(() => {
-    inFlightAllocations.delete(kind);
-  });
-}
 
 /**
  * Claim a set of resource allowances from the host. Each claim surfaces
@@ -625,22 +521,30 @@ function claimOneAllowance(
  * does not abort subsequent claims; the caller can inspect the array
  * to decide whether to proceed.
  */
-export function claimResourceAllowances(
-  kinds: readonly ResourceAllowanceKind[],
-  options: { timeoutMs?: number } = {},
-): Promise<readonly ResourceAllowanceOutcome[]> {
-  if (typeof window === "undefined") return Promise.resolve([]);
-  if (!isInHost()) return Promise.resolve([]);
-  const timeoutMs = options.timeoutMs ?? ALLOC_TIMEOUT_MS;
-  return (async () => {
-    const out: ResourceAllowanceOutcome[] = [];
-    for (const kind of kinds) {
-      out.push(await claimOneAllowance(kind, timeoutMs));
-    }
-    return out;
-  })();
-}
+export async function claimResourceAllowances(
+): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  if (!isInHost()) return Promise.resolve(false);
+    const result = await hostApi.requestResourceAllocation(
+    enumValue("v1", [
+      enumValue("BulletinAllowance", undefined),
+      enumValue("SmartContractAllowance", 0),
+      enumValue("AutoSigning", undefined),
+      enumValue("StatementStoreAllowance", undefined)
+    ]),
+  );
 
-export function getResourceAllowanceOutcomes(): readonly ResourceAllowanceOutcome[] {
-  return Array.from(allocationOutcomes.values());
+  const outcome = result.match(
+    (response) => {
+      const outcomes = ((response as { value?: unknown }).value as { tag?: string }[]) ?? [];
+      const order = ["BulletinAllowance", "SmartContractAllowance(0)", "AutoSigning"] as const;
+      outcomes.forEach((o, i) => console.info(`[allowances] ${order[i]}: ${o.tag ?? "unknown"}`));
+      return true;
+    },
+    (err: unknown) => {
+      console.warn("[allowances] requestResourceAllocation failed:", err);
+      return false;
+    },
+  );
+  return outcome;
 }

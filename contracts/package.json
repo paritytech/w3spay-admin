@@ -21,6 +21,7 @@
     "registry:list": "hardhat compile && tsx scripts/w3spay-list-merchants.ts",
     "registry:upsert-item-config": "hardhat compile && tsx scripts/w3spay-upsert-item-config.ts",
     "registry:list-item-configs": "hardhat compile && tsx scripts/w3spay-list-item-configs.ts",
+    "registry:list-processor-configs": "hardhat compile && tsx scripts/w3spay-list-processor-configs.ts",
     "list": "npm run registry:list",
     "node": "hardhat node",
     "clean": "hardhat clean"

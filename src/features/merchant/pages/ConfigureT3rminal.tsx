@@ -36,6 +36,7 @@ import type { MerchantProfile } from "@/shared/lib/config-qr";
 import type { UseItemConfigsResult } from "@features/items/item-configs.ts";
 import { CopyableRow } from "@shared/components/CopyableRow.tsx";
 import { Icon } from "@shared/components/Icon.tsx";
+import { PasskeyInput } from "@features/payment-processors/components/PasskeyInput.tsx";
 import {
   ACard,
   ADotted,
@@ -99,7 +100,7 @@ export function ConfigureT3rminalRoute({ merchantKey }: ConfigureT3rminalRoutePr
     return (
       <Guard
         onBack={onBack}
-        message="Sign in via the Polkadot host to derive a report password and publish to Bulletin."
+        message="Sign in via the Polkadot host to issue the T3rminal config QR."
       />
     );
   }
@@ -192,6 +193,8 @@ function ConfigureT3rminalBody(props: ConfigureT3rminalBodyProps) {
   const [payloadUr, setPayloadUr] = useState<string | null>(null);
   const [generatedAssignment, setGeneratedAssignment] = useState(existingAssignment);
   const [generatedProfile, setGeneratedProfile] = useState<MerchantProfile | null>(null);
+  const [passcode, setPasscode] = useState("");
+  const [showPasscode, setShowPasscode] = useState(false);
 
   const { restaurants: restaurantsMap, hydrated: restaurantsHydrated, getRestaurant } = restaurants;
 
@@ -254,19 +257,24 @@ function ConfigureT3rminalBody(props: ConfigureT3rminalBodyProps) {
     };
   }, [qrRender]);
 
-  const canGenerate = selected !== null && !selected.dirty && selectedConfig !== null;
+  const canGenerate =
+    selected !== null &&
+    !selected.dirty &&
+    selectedConfig !== null &&
+    (passcode.trim() !== "" || existingAssignment != null);
 
-  const handleGenerate = (regeneratePassword: boolean) => {
+  const handleGenerate = () => {
     if (!canGenerate || !selectedConfig || !selected) return;
     try {
       const issuedAt = new Date().toISOString();
+      const trimmed = passcode.trim();
       const profile = selectedRestaurant?.profile;
       const assignment = assignments.upsertAssignment({
         merchant,
         config: selectedConfig,
         itemConfigCid: selected.cid,
         adminPublicKey,
-        regeneratePassword,
+        passcode: trimmed === "" ? null : trimmed,
         nowIso: issuedAt,
         payloadVersion: 2,
       });
@@ -329,6 +337,7 @@ function ConfigureT3rminalBody(props: ConfigureT3rminalBodyProps) {
       setGeneratedAssignment(assignment);
       setGeneratedProfile(profile ?? null);
       setQrError(null);
+      setPasscode("");
     } catch (caught) {
       setQrError(caught instanceof Error ? caught.message : String(caught));
       if (qrRender) URL.revokeObjectURL(qrRender.url);
@@ -519,18 +528,39 @@ function ConfigureT3rminalBody(props: ConfigureT3rminalBodyProps) {
 
       <div style={{ height: 14 }} />
 
-      <APrimary onClick={() => handleGenerate(false)} disabled={!canGenerate}>
+      <AEye>Report passcode</AEye>
+      <ACard padding={14} style={{ marginTop: 8 }}>
+        <div style={{ fontSize: 11, color: COLOR.muted, lineHeight: 1.5, marginBottom: 12 }}>
+          Encrypts this T3rminal's daily reports. You'll enter the same passcode
+          under Reports to unlock them. The QR carries a key derived from it —
+          the passcode itself never leaves this screen.
+        </div>
+        <PasskeyInput
+          value={passcode}
+          onChange={setPasscode}
+          show={showPasscode}
+          onToggle={() => setShowPasscode((s) => !s)}
+          placeholder="report passcode"
+        />
+        {existingAssignment != null ? (
+          <div style={{ fontSize: 11, color: COLOR.muted, lineHeight: 1.5, marginTop: 10 }}>
+            A passcode is already set (issued {existingAssignment.issuedAt}). Leave
+            blank to keep it; type a new one to replace it — older days will then
+            need the old passcode.
+          </div>
+        ) : null}
+      </ACard>
+
+      <div style={{ height: 14 }} />
+
+      <APrimary onClick={handleGenerate} disabled={!canGenerate}>
         <Icon name="check" size={13} />{" "}
-        {generatedAssignment == null ? "Generate QR" : "Update QR (keep password)"}
+        {existingAssignment == null
+          ? "Generate QR"
+          : passcode.trim() === ""
+            ? "Update QR (keep passcode)"
+            : "Update QR (new passcode)"}
       </APrimary>
-      <div style={{ height: 8 }} />
-      <ASecondary
-        onClick={() => handleGenerate(true)}
-        disabled={!canGenerate}
-        icon={<Icon name="copy" size={13} />}
-      >
-        Regenerate password
-      </ASecondary>
 
       {qrError ? (
         <div style={{ marginTop: 12, fontSize: 12, color: COLOR.redSoft }}>

@@ -16,6 +16,7 @@ import { FeedbackToast } from "@shared/components/FeedbackToast.tsx";
 import { ExportFallbackModal } from "@shared/components/ExportFallbackModal.tsx";
 import { AFrame, ARail, ATabs } from "@shared/components/primitives.tsx";
 import { DebugPanel } from "@/shared/chain/host/debug/index.ts";
+import { installResumeRecovery } from "@shared/chain/host/resume-recovery.ts";
 import { TABS, TAB_DEFAULT_PATH, type TabId } from "./routes.ts";
 
 declare module "@tanstack/react-router" {
@@ -27,6 +28,11 @@ declare module "@tanstack/react-router" {
 
 export function RootLayout() {
   useSessionSync();
+  // Host-link watchdog: rebuilds stuck PAPI clients after webview suspends.
+  useEffect(() => {
+    if (isDemoMode()) return;
+    return installResumeRecovery();
+  }, []);
   return <Shell />;
 }
 

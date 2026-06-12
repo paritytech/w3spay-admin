@@ -14,14 +14,10 @@ import type { PublishedConfigSnapshot } from "@features/items/item-config-drafts
 import type { ItemConfig } from "@features/items/items-model.ts";
 import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
 import { queryKeys, queryRoots } from "@shared/chain/keys.ts";
-import { queryClient } from "@shared/chain/query-client.ts";
-
-// Poll the registry every 5s so each admin device converges on configs
-// another device has published.
-const ITEM_CONFIG_REGISTRY_POLL_MS = 5_000;
+import { queryClient, REGISTRY_POLL_MS } from "@shared/chain/query-client.ts";
 
 // Envelope bodies are content-addressed by CID, so a body never changes
-// for a given CID. Cache decoded bodies across polls: the 5s refetch then
+// for a given CID. Cache decoded bodies across polls: each refetch then
 // only fetches genuinely new CIDs from the IPFS gateway.
 const envelopeBodyCache = new Map<string, ItemConfig>();
 
@@ -80,7 +76,7 @@ export function itemConfigRegistryQueryOptions() {
     queryFn: (): Promise<ItemConfigRegistrySnapshot> =>
       isDemoMode() ? Promise.resolve(demoRegistrySnapshot()) : fetchRegistrySnapshot(),
     enabled: isDemoMode() || registryAddress.trim() !== "",
-    refetchInterval: ITEM_CONFIG_REGISTRY_POLL_MS,
+    refetchInterval: REGISTRY_POLL_MS,
       staleTime: 0,
   });
 }

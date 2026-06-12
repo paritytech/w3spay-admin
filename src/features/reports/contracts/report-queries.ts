@@ -10,6 +10,7 @@ import {
   decryptReportV2,
   DecryptReportError,
   type DecryptedReportState,
+  type EncryptedReportEnvelopeV2,
   type EncryptedReportMeta,
   type UseDecryptedReportArgs,
 } from "@features/reports/encrypted-report.ts";
@@ -69,6 +70,34 @@ function decryptReason(caught: unknown): string {
   return String(caught);
 }
 
+type CandidateDecrypt =
+  | { readonly ok: true; readonly plaintext: string }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * Try each candidate passphrase against a v2 envelope in order. A wrong key
+ * (`authFailed`) advances to the next; corrupt ciphertext
+ * (`malformedCiphertext`) fails immediately regardless of key. Returns the
+ * last failure reason once all candidates are exhausted.
+ */
+function decryptWithCandidates(
+  envelope: EncryptedReportEnvelopeV2,
+  passwords: ReadonlyArray<string>,
+): CandidateDecrypt {
+  let reason = "no candidate passphrase";
+  for (const password of passwords) {
+    try {
+      return { ok: true, plaintext: decryptReportV2(envelope, password) };
+    } catch (caught) {
+      reason = decryptReason(caught);
+      if (caught instanceof DecryptReportError && caught.code === "malformedCiphertext") {
+        break;
+      }
+    }
+  }
+  return { ok: false, reason };
+}
+
 // ── Daily-report load (transactions stream) ────────────────────────
 
 /**
@@ -91,7 +120,7 @@ export type DailyReportLoadResult =
  */
 export async function loadDailyReport(
   cid: string,
-  password: string,
+  passwords: ReadonlyArray<string>,
   gatewayBase: string,
 ): Promise<DailyReportLoadResult> {
   await acquire();
@@ -116,15 +145,13 @@ export async function loadDailyReport(
     return { kind: "legacy-v1" };
   }
   // envelope.kind === "v2"
-  let plaintext: string;
-  try {
-    plaintext = decryptReportV2(envelope.envelope, password);
-  } catch (caught) {
-    return { kind: "decrypt-error", reason: decryptReason(caught) };
+  const decrypted = decryptWithCandidates(envelope.envelope, passwords);
+  if (!decrypted.ok) {
+    return { kind: "decrypt-error", reason: decrypted.reason };
   }
   let json: unknown;
   try {
-    json = JSON.parse(plaintext);
+    json = JSON.parse(decrypted.plaintext);
   } catch {
     return { kind: "parse-error" };
   }
@@ -139,23 +166,18 @@ export interface DailyReportQueryArgs {
   readonly shopKey: `0x${string}`;
   readonly date: string;
   readonly cid: string;
-  /** `null` keeps the query disabled — the stream derives `no-password`. */
-  readonly password: string | null;
+  /** Candidate passphrases; empty keeps the query disabled (stream derives `no-password`). */
+  readonly passwords: ReadonlyArray<string>;
+  readonly unlockNonce: number;
   readonly gatewayBase: string;
 }
 
 export function dailyReportQueryOptions(args: DailyReportQueryArgs) {
-  const { shopKey, date, cid, password, gatewayBase } = args;
+  const { shopKey, date, cid, passwords, unlockNonce, gatewayBase } = args;
   return queryOptions({
-    queryKey: queryKeys.dailyReport(shopKey, date),
-    queryFn: (): Promise<DailyReportLoadResult> => {
-      // `enabled` guarantees a non-null password.
-      if (password == null) {
-        throw new Error("dailyReportQueryOptions: password is null");
-      }
-      return loadDailyReport(cid, password, gatewayBase);
-    },
-    enabled: password != null,
+    queryKey: queryKeys.dailyReport(shopKey, date, unlockNonce),
+    queryFn: (): Promise<DailyReportLoadResult> => loadDailyReport(cid, passwords, gatewayBase),
+    enabled: passwords.length > 0,
   });
 }
 
@@ -165,7 +187,8 @@ interface StreamJob {
   readonly shopKey: `0x${string}`;
   readonly date: string;
   readonly cid: string;
-  readonly password: string | null;
+  readonly passwords: ReadonlyArray<string>;
+  readonly unlockNonce: number;
   readonly terminalRef: TerminalRef;
 }
 
@@ -202,7 +225,8 @@ export function useTransactionsStream(
           shopKey: t.shopKey,
           date: entry.date,
           cid: entry.metadata.cid,
-          password: t.reportPassword,
+          passwords: t.reportPasswords,
+          unlockNonce: t.unlockNonce,
           terminalRef: t.terminal,
         });
       }
@@ -216,7 +240,8 @@ export function useTransactionsStream(
         shopKey: job.shopKey,
         date: job.date,
         cid: job.cid,
-        password: job.password,
+        passwords: job.passwords,
+        unlockNonce: job.unlockNonce,
         gatewayBase,
       }),
     ),
@@ -237,7 +262,7 @@ export function useTransactionsStream(
     for (let i = 0; i < jobs.length; i += 1) {
       const job = jobs[i];
       if (job == null) continue;
-      if (job.password == null) {
+      if (job.passwords.length === 0) {
         // `no-password` counts as loaded, never a failure.
         loaded += 1;
         continue;
@@ -310,7 +335,7 @@ function collectMissingPassword(
 ): ReadonlyArray<TransactionsStreamMissingPassword> {
   const out: TransactionsStreamMissingPassword[] = [];
   for (const t of terminals) {
-    if (t.reportPassword != null) continue;
+    if (t.reportPasswords.length > 0) continue;
     if (t.entries.length === 0) continue;
     out.push({ key: t.terminal.key, name: t.terminal.name });
   }
@@ -328,7 +353,7 @@ export type DecryptedReportLoadResult =
   | { readonly kind: "ready"; readonly report: DailyReport; readonly meta: EncryptedReportMeta }
   | { readonly kind: "legacy-v1"; readonly meta: EncryptedReportMeta | null }
   | { readonly kind: "corrupt"; readonly reason: string }
-  | { readonly kind: "decrypt-error"; readonly reason: string }
+  | { readonly kind: "decrypt-error"; readonly reason: string; readonly meta: EncryptedReportMeta }
   | { readonly kind: "parse-error" }
   | { readonly kind: "fetch-error"; readonly reason: string };
 
@@ -340,7 +365,7 @@ export type DecryptedReportLoadResult =
  */
 async function loadDecryptedReport(
   cid: string,
-  password: string,
+  passwords: ReadonlyArray<string>,
   gatewayBase: string,
 ): Promise<DecryptedReportLoadResult> {
   const result = await fetchReportEnvelope({ cid, gatewayBase });
@@ -358,15 +383,13 @@ async function loadDecryptedReport(
     return { kind: "legacy-v1", meta: envelope.meta };
   }
   // envelope.kind === "v2"
-  let plaintext: string;
-  try {
-    plaintext = decryptReportV2(envelope.envelope, password);
-  } catch (caught) {
-    return { kind: "decrypt-error", reason: decryptReason(caught) };
+  const decrypted = decryptWithCandidates(envelope.envelope, passwords);
+  if (!decrypted.ok) {
+    return { kind: "decrypt-error", reason: decrypted.reason, meta: envelope.envelope.meta };
   }
   let json: unknown;
   try {
-    json = JSON.parse(plaintext);
+    json = JSON.parse(decrypted.plaintext);
   } catch {
     return { kind: "parse-error" };
   }
@@ -379,19 +402,20 @@ async function loadDecryptedReport(
 
 export function decryptedReportQueryOptions(
   cid: string | null,
-  password: string | null,
+  passwords: ReadonlyArray<string>,
+  unlockNonce: number,
   gatewayBase: string,
 ) {
   return queryOptions({
-    queryKey: queryKeys.decryptedReport(cid ?? ""),
+    queryKey: queryKeys.decryptedReport(cid ?? "", unlockNonce),
     queryFn: (): Promise<DecryptedReportLoadResult> => {
-      // `enabled` guarantees a non-null cid + password.
-      if (cid == null || password == null) {
-        throw new Error("decryptedReportQueryOptions: cid/password is null");
+      // `enabled` guarantees a non-null cid + at least one candidate.
+      if (cid == null) {
+        throw new Error("decryptedReportQueryOptions: cid is null");
       }
-      return loadDecryptedReport(cid, password, gatewayBase);
+      return loadDecryptedReport(cid, passwords, gatewayBase);
     },
-    enabled: cid != null && password != null,
+    enabled: cid != null && passwords.length > 0,
   });
 }
 
@@ -402,16 +426,16 @@ export function decryptedReportQueryOptions(
  * outcome. `refresh` invalidates the report's key so a retry re-runs.
  */
 export function useDecryptedReport(args: UseDecryptedReportArgs): DecryptedReportState {
-  const { cid, reportPassword, gatewayBase } = args;
-  const query = useQuery(decryptedReportQueryOptions(cid, reportPassword, gatewayBase));
+  const { cid, passwords, unlockNonce, gatewayBase } = args;
+  const query = useQuery(decryptedReportQueryOptions(cid, passwords, unlockNonce, gatewayBase));
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({
-      queryKey: queryKeys.decryptedReport(cid ?? ""),
+      queryKey: queryKeys.decryptedReport(cid ?? "", unlockNonce),
     });
-  }, [cid]);
+  }, [cid, unlockNonce]);
 
-  if (cid == null || reportPassword == null) {
+  if (cid == null || passwords.length === 0) {
     return { kind: "idle" };
   }
   const data = query.data;
@@ -426,7 +450,7 @@ export function useDecryptedReport(args: UseDecryptedReportArgs): DecryptedRepor
     case "corrupt":
       return { kind: "corrupt", reason: data.reason, refresh };
     case "decrypt-error":
-      return { kind: "decrypt-error", reason: data.reason, refresh };
+      return { kind: "decrypt-error", reason: data.reason, meta: data.meta, refresh };
     case "parse-error":
       return { kind: "parse-error", refresh };
     case "fetch-error":

@@ -67,7 +67,7 @@ export const useAssignmentsStore = create<AssignmentsState>((set, get) => ({
       itemConfigCid: args.itemConfigCid,
       adminPublicKey: args.adminPublicKey,
       existing: get().assignments.get(args.merchant.key) ?? null,
-      regeneratePassword: args.regeneratePassword === true,
+      passcode: args.passcode,
       nowIso: args.nowIso,
       payloadVersion: args.payloadVersion,
     });

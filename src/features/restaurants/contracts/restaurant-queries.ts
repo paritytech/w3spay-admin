@@ -10,11 +10,8 @@ import type { MerchantProfileRecord } from "./merchant-profile-writes.ts";
 import { resolveRegistryAddress } from "@shared/chain/merchant-registry-write.ts";
 import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
 import { queryKeys } from "@shared/chain/keys.ts";
+import { REGISTRY_POLL_MS } from "@shared/chain/query-client.ts";
 import type { Restaurant } from "../restaurants.ts";
-
-// Poll the registry every 5s so each admin device converges on profiles
-// another device has published.
-const RESTAURANT_REGISTRY_POLL_MS = 5_000;
 
 export function restaurantRegistryConfigured(): boolean {
   return envConfig.contracts.merchantRegistryAddress.trim() !== "";
@@ -59,6 +56,6 @@ export function restaurantRegistryQueryOptions() {
             (await listMerchantProfiles(resolveRegistryAddress())).map(recordToRestaurant),),
     // A real empty address is surfaced as a config-error, not a failed fetch.
     enabled: isDemoMode() || restaurantRegistryConfigured(),
-    refetchInterval: RESTAURANT_REGISTRY_POLL_MS,
+    refetchInterval: REGISTRY_POLL_MS,
   });
 }

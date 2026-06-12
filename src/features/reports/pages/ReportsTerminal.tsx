@@ -15,6 +15,7 @@ import {
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import type { T3rminalAssignmentV1 } from "@shared/store/t3rminal-assignments.ts";
 import { useT3rminalAssignments } from "@shared/store/use-assignments-store.ts";
+import { deriveReportPasswordFromPasscode } from "@shared/lib/t3rminal-config-qr.ts";
 import type { TransactionsStreamTerminal } from "@features/reports/transaction-stream.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import {
@@ -28,6 +29,7 @@ import {
 import { COLOR } from "@shared/components/tokens.ts";
 import { ReportDateRow } from "@features/reports/components/ReportDateRow.tsx";
 import { ReportDetailPanel } from "@features/reports/components/ReportDetailPanel.tsx";
+import { PasskeyInput } from "@features/payment-processors/components/PasskeyInput.tsx";
 import {
   ReportsViewToggle,
   type ReportsViewId,
@@ -55,6 +57,33 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
 
   const [view, setView] = useState<ReportsViewId>("transactions");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [passcodeDraft, setPasscodeDraft] = useState("");
+  const [showPasscode, setShowPasscode] = useState(false);
+  const [sessionPasswords, setSessionPasswords] = useState<ReadonlyArray<string>>([]);
+  const [unlockNonce, setUnlockNonce] = useState(0);
+  const [showUnlock, setShowUnlock] = useState(false);
+
+  const handleUnlock = () => {
+    const trimmed = passcodeDraft.trim();
+    if (trimmed.length === 0) return;
+    // Derived-wire-password first (QR-flow), raw phrase second (typed on the
+    // terminal). Session-only — never persisted (processor passkey convention).
+    setSessionPasswords([deriveReportPasswordFromPasscode(trimmed), trimmed]);
+    setUnlockNonce((n) => n + 1);
+    setShowUnlock(false);
+  };
+
+  // An explicit unlock overrides a stale stored assignment; otherwise fall
+  // back to the QR-issued password when one is on file.
+  const passwords = useMemo<ReadonlyArray<string>>(
+    () =>
+      sessionPasswords.length > 0
+        ? sessionPasswords
+        : assignment != null
+          ? [assignment.reportPassword]
+          : [],
+    [sessionPasswords, assignment],
+  );
 
   // If the merchant disappears mid-view (e.g. user removed via another
   // surface), close any open detail so we don't render against stale data.
@@ -79,11 +108,12 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
                 terminalId: merchant.terminalId,
               },
               shopKey,
-              reportPassword: assignment?.reportPassword ?? null,
+              reportPasswords: passwords,
+              unlockNonce,
               entries,
             },
           ],
-    [shopKey, merchant, assignment, entries],
+    [shopKey, merchant, passwords, unlockNonce, entries],
   );
 
   const backToReports = () =>
@@ -133,7 +163,41 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
       </AGhost>
       <div style={{ height: 6 }} />
       <AHead eyebrow="T3rminal reports" title={merchant.name} size={28} />
-      <Subhead merchant={merchant} assignment={assignment} />
+      <Subhead
+        merchant={merchant}
+        assignment={assignment}
+        unlocked={sessionPasswords.length > 0}
+      />
+
+      {assignment == null || showUnlock ? (
+        <ACard padding={14} style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: COLOR.text3, lineHeight: 1.55, marginBottom: 10 }}>
+            Enter the report passcode set in Configure T3rminal.
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ flex: 1 }}>
+              <PasskeyInput
+                value={passcodeDraft}
+                onChange={setPasscodeDraft}
+                show={showPasscode}
+                onToggle={() => setShowPasscode((s) => !s)}
+                placeholder="report passcode"
+              />
+            </div>
+            <ASecondary
+              full={false}
+              disabled={passcodeDraft.trim().length === 0}
+              onClick={handleUnlock}
+            >
+              Unlock
+            </ASecondary>
+          </div>
+        </ACard>
+      ) : (
+        <div style={{ marginTop: 8 }}>
+          <AGhost onClick={() => setShowUnlock(true)}>Unlock with a different passcode</AGhost>
+        </div>
+      )}
 
       <div style={{ height: 14 }} />
       <ReportsViewToggle value={view} onChange={setView} />
@@ -154,7 +218,8 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
           entries={entries}
           selectedDate={selectedDate}
           selectedEntry={selectedEntry}
-          assignment={assignment}
+          passwords={passwords}
+          unlockNonce={unlockNonce}
           onSelect={(date) => setSelectedDate(date)}
         />
       )}
@@ -165,9 +230,11 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
 function Subhead({
   merchant,
   assignment,
+  unlocked,
 }: {
   merchant: AdminMerchant;
   assignment: T3rminalAssignmentV1 | null;
+  unlocked: boolean;
 }) {
   return (
     <ACard padding={14} style={{ marginTop: 8 }}>
@@ -185,7 +252,7 @@ function Subhead({
             {merchant.key.slice(0, 14)}…{merchant.key.slice(-6)}
           </AMono>
         </div>
-        {assignment == null ? (
+        {assignment == null && !unlocked ? (
           <span
             style={{
               fontSize: 10,
@@ -213,7 +280,7 @@ function Subhead({
               border: `1px solid rgba(34,197,94,0.30)`,
             }}
           >
-            QR ready
+            {assignment != null ? "QR ready" : "Unlocked"}
           </span>
         )}
       </div>
@@ -226,14 +293,16 @@ function DaysSegment({
   entries,
   selectedDate,
   selectedEntry,
-  assignment,
+  passwords,
+  unlockNonce,
   onSelect,
 }: {
   state: TerminalReportIndexState;
   entries: ReadonlyArray<ReportIndexEntry>;
   selectedDate: string | null;
   selectedEntry: ReportIndexEntry | null;
-  assignment: T3rminalAssignmentV1 | null;
+  passwords: ReadonlyArray<string>;
+  unlockNonce: number;
   onSelect: (date: string | null) => void;
 }) {
   return (
@@ -242,7 +311,8 @@ function DaysSegment({
         <>
           <ReportDetailPanel
             entry={selectedEntry}
-            assignment={assignment}
+            passwords={passwords}
+            unlockNonce={unlockNonce}
             onClose={() => onSelect(null)}
           />
           <div style={{ height: 14 }} />

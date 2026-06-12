@@ -10,7 +10,11 @@ import { ACard, AHead, AMono, APrimary, ASecondary } from "@shared/components/pr
 import { Icon } from "@shared/components/Icon.tsx";
 import { COLOR, FONT } from "@shared/components/tokens.ts";
 
+import { envConfig } from "@/config.ts";
+import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
+
 import { processorConfigRegistryQueryOptions } from "../contracts/processor-config-queries.ts";
+import { processorListViewState } from "../payment-processor-model.ts";
 import { useMergedRemoteConfigExport, type MergedRemoteConfigExportApi } from "../use-merged-remote-config-export.ts";
 import { ConfigEditor } from "../components/ConfigEditor.tsx";
 import { ConfigListSkeleton } from "../components/ConfigListSkeleton.tsx";
@@ -27,10 +31,35 @@ export function PaymentProcessors({ view }: { view: PaymentProcessorsView }) {
   return <ConfigEditor initialGroupId={view.kind === "edit" ? view.groupId : null} />;
 }
 
+/**
+ * Which registry this build is reading. Surfaced on the empty/error states so
+ * a stale bundle baked with an old registry address (whose registry has no
+ * processor configs) is diagnosable at a glance instead of looking like
+ * "nothing published".
+ */
+function RegistryIdentity() {
+  if (isDemoMode()) return null;
+  return (
+    <div style={{ marginTop: 8, fontSize: 11, color: COLOR.faint }}>
+      Registry{" "}
+      <AMono size={11} color={COLOR.text2}>
+        {shortAddr(envConfig.contracts.merchantRegistryAddress, 8, 6)}
+      </AMono>{" "}
+      · {envConfig.chain.network}
+    </div>
+  );
+}
+
 function ConfigList() {
   const navigate = useNavigate();
   const query = useQuery(processorConfigRegistryQueryOptions());
   const rows = query.data ?? [];
+  const view = processorListViewState({
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    rowCount: rows.length,
+  });
   const exporter = useMergedRemoteConfigExport();
 
   return (
@@ -43,13 +72,25 @@ function ConfigList() {
         Bulletin and indexed on the registry by groupId.
       </div>
 
-      {query.isLoading && rows.length === 0 ? (
+      {view.kind === "skeleton" ? (
         <ConfigListSkeleton />
-      ) : rows.length === 0 ? (
+      ) : view.kind === "error" ? (
+        <ACard padding={18}>
+          <div style={{ fontSize: 13, color: COLOR.muted, lineHeight: 1.5 }}>
+            Couldn't load payment-processor configs from the registry.
+          </div>
+          <ErrorBox message={view.message} />
+          <RegistryIdentity />
+          <div style={{ marginTop: 12 }}>
+            <ASecondary onClick={() => void query.refetch()}>Try again</ASecondary>
+          </div>
+        </ACard>
+      ) : view.kind === "empty" ? (
         <ACard padding={18}>
           <div style={{ fontSize: 13, color: COLOR.muted, lineHeight: 1.5 }}>
             No payment-processor configs published yet.
           </div>
+          <RegistryIdentity />
         </ACard>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

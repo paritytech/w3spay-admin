@@ -81,7 +81,7 @@ export function useItemConfigPublish(
       const dirtyIds = targetIds ?? dirtyConfigIds(configs, publishedSnapshots);
 
       // Demo mode: no chain publish — lift the current drafts into the
-      // registry cache so the dirty diff goes green. (Ephemeral: the 60s
+      // registry cache so the dirty diff goes green. (Ephemeral: the registry
       // poll re-synthesizes from the seed, matching prior demo behavior.)
       if (isDemoMode()) {
         if (dirtyIds.length === 0) {

@@ -5,10 +5,11 @@ import { useState } from "react";
 
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import { shortAddr, shortTerminalId } from "@features/merchant/merchant-model.ts";
-import { ACard, AField, AGhost, AMono, ASecondary } from "@shared/components/primitives.tsx";
+import { ACard, AField, AMono, ASecondary } from "@shared/components/primitives.tsx";
 import { CopyableRow } from "@shared/components/CopyableRow.tsx";
 import { Icon } from "@shared/components/Icon.tsx";
-import { COLOR } from "@shared/components/tokens.ts";
+import { COLOR, FONT } from "@shared/components/tokens.ts";
+import { useFeedbackStore } from "@shared/store/use-feedback-store.ts";
 
 import type { ConfigEditorApi } from "../use-config-editor.ts";
 
@@ -97,20 +98,10 @@ function TerminalCard({ merchant: m, editor }: { merchant: AdminMerchant; editor
             mono
             copyField={`topic-${m.terminalId}`}
           />
-          <CopyableRow
-            label="P-256 key (PEM)"
-            value={term.pemFile}
-            display="PKCS#8 PEM — tap to copy"
-            mono
+          <PemKeyField
+            pem={term.pemFile}
             copyField={`pem-${m.terminalId}`}
-            noBorder
-          />
-          <div style={{ fontSize: 11, color: COLOR.faint, lineHeight: 1.5, marginTop: 4 }}>
-            Auto-generated from the platform CSPRNG, stored on this device, and published inside the
-            encrypted bundle.
-          </div>
-          <RegenerateKeyControl
-            disabled={generating}
+            generating={generating}
             onRegenerate={() => void editor.regenerateKey(m.terminalId)}
           />
         </div>
@@ -119,39 +110,103 @@ function TerminalCard({ merchant: m, editor }: { merchant: AdminMerchant; editor
   );
 }
 
-function RegenerateKeyControl({
-  disabled,
+function PemKeyField({
+  pem,
+  copyField,
+  generating,
   onRegenerate,
 }: {
-  disabled: boolean;
+  pem: string;
+  copyField: string;
+  generating: boolean;
   onRegenerate: () => void;
 }) {
-  const [confirm, setConfirm] = useState(false);
+  const [show, setShow] = useState(false);
+  const copiedField = useFeedbackStore((s) => s.copiedField);
+  const copyValue = useFeedbackStore((s) => s.copyValue);
+  const copied = copiedField === copyField;
 
-  if (!confirm) {
-    return (
-      <div style={{ marginTop: 6 }}>
-        <AGhost onClick={() => setConfirm(true)}>Regenerate key…</AGhost>
-      </div>
-    );
-  }
   return (
-    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-      <span style={{ flex: "1 1 200px", fontSize: 11, color: COLOR.redSoft, lineHeight: 1.5 }}>
-        Replace this terminal's P-256 key? Publish the config and re-provision the terminal
-        (new remote-config export) afterwards — payments encrypted to the old key won't decode.
-      </span>
-      <AGhost onClick={() => setConfirm(false)}>Cancel</AGhost>
-      <ASecondary
-        full={false}
-        disabled={disabled}
-        onClick={() => {
-          setConfirm(false);
-          onRegenerate();
+    <div style={{ marginTop: 4 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "8px 0",
         }}
       >
-        Regenerate key
-      </ASecondary>
+        <span
+          style={{
+            fontSize: 11,
+            color: COLOR.muted,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+          }}
+        >
+          P-256 key (PEM)
+        </span>
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          aria-label={show ? "Hide key" : "View key"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: COLOR.muted,
+            fontSize: 11,
+            padding: 4,
+          }}
+        >
+          <Icon name={show ? "eye-off" : "eye"} size={14} />
+          {show ? "Hide" : "View"}
+        </button>
+      </div>
+      {show ? (
+        <div
+          onClick={() => copyValue(pem, copyField)}
+          role="button"
+          tabIndex={0}
+          title="Tap to copy"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              copyValue(pem, copyField);
+            }
+          }}
+          style={{
+            fontFamily: FONT.mono,
+            fontSize: 10.5,
+            lineHeight: 1.5,
+            color: copied ? COLOR.greenSoft : COLOR.text2,
+            background: COLOR.surface2,
+            borderRadius: 6,
+            padding: 10,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+            maxHeight: 160,
+            overflow: "auto",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          {pem}
+        </div>
+      ) : null}
+      <div style={{ marginTop: 8 }}>
+        <ASecondary
+          full={false}
+          icon={<Icon name="refresh-cw" size={13} />}
+          onClick={onRegenerate}
+          disabled={generating}
+        >
+          Regenerate key
+        </ASecondary>
+      </div>
     </div>
   );
 }

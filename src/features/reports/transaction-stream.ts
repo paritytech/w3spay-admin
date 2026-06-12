@@ -175,8 +175,10 @@ export interface TransactionsStreamTerminal {
   readonly terminal: TerminalRef;
   /** Lowercased registry `terminalKey`, the on-chain `shopKey`. */
   readonly shopKey: `0x${string}`;
-  /** QR-shared password; `null` keeps the terminal's days in `no-password`. */
-  readonly reportPassword: string | null;
+  /** Candidate passphrases tried in order; empty ⇒ the terminal's days stay in `no-password`. */
+  readonly reportPasswords: ReadonlyArray<string>;
+  /** Bumped on each explicit unlock so a corrected passcode refetches; secrets stay out of query keys. */
+  readonly unlockNonce: number;
   /** Newest-first list of (date, metadata) rows from the index. */
   readonly entries: ReadonlyArray<ReportIndexEntry>;
 }

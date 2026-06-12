@@ -6,6 +6,7 @@ import { keccak256, encodePacked } from "viem";
 import {
   accountId32HexToSs58,
   accountId32ToH160IfLeftPadded,
+  normalizeMerchantDestinationInput,
   type AccountId32Hex,
   type H160Hex,
 } from "@shared/lib/address.ts";
@@ -51,6 +52,80 @@ export interface MerchantFormErrors {
   terminalId?: string;
   merchantId?: string;
   destination?: string;
+}
+
+export type RegisterMerchantInput =
+  | {
+      readonly ok: true;
+      readonly payload: {
+        readonly merchantId: string;
+        readonly terminalId: string;
+        readonly destinationAccountId: AccountId32Hex;
+        readonly displayName: string;
+      };
+      readonly terminalKey: `0x${string}`;
+    }
+  | { readonly ok: false; readonly errors: MerchantFormErrors };
+
+/**
+ * Validate a merchant form and build the `registerMerchant` payload.
+ * For T3rminal devices the terminalId is derived from the destination and
+ * the display name defaults to `defaultT3rminalDisplayName`.
+ */
+export function buildRegisterMerchant(
+  form: MerchantForm,
+  merchants: ReadonlyArray<AdminMerchant>,
+  kind: MerchantKind,
+): RegisterMerchantInput {
+  const errors: MerchantFormErrors = {};
+  const merchantId = form.merchantId.trim();
+  if (!merchantId) errors.merchantId = "Required.";
+
+  let destinationAccountId: AccountId32Hex | null = null;
+  try {
+    destinationAccountId = normalizeMerchantDestinationInput(form.destination);
+  } catch (caught) {
+    errors.destination = caught instanceof Error ? caught.message : String(caught);
+  }
+
+  let terminalId = "";
+  if (kind === "t3rminal") {
+    if (destinationAccountId != null) {
+      terminalId = t3rminalTerminalIdForDestination(destinationAccountId);
+    }
+  } else {
+    terminalId = form.terminalId.trim();
+    if (!terminalId) errors.terminalId = "Required.";
+  }
+
+  if (
+    terminalId !== "" &&
+    merchants.some((m) => m.terminalId === terminalId && m.merchantId === merchantId)
+  ) {
+    if (kind === "t3rminal") {
+      errors.destination = "This T3rminal device is already registered under this merchant.";
+    } else {
+      errors.terminalId = "This (merchantId, terminalId) pair is already registered.";
+    }
+  }
+
+  if (destinationAccountId == null || Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  const displayNameInput = form.displayName.trim();
+  const displayName =
+    displayNameInput !== ""
+      ? displayNameInput
+      : kind === "t3rminal"
+        ? defaultT3rminalDisplayName(destinationAccountId)
+        : "";
+
+  return {
+    ok: true,
+    payload: { merchantId, terminalId, destinationAccountId, displayName },
+    terminalKey: computeTerminalKey(merchantId, terminalId),
+  };
 }
 
 export interface RegistryMerchantRow {
