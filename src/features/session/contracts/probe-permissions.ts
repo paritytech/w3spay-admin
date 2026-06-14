@@ -49,28 +49,36 @@ export async function resolveHostPermissions(
   const hostChainSupport = await checkHostChainSupport(genesisHash);
   const chainSubmitGrant = await requestRemotePermission("ChainSubmit");
 
-  const alreadyGranted = await loadGrantedAllowances();
-  if (alreadyGranted) {
-    console.info("Already granted required resource allowances");
-    return { hostChainSupport, chainSubmitGrant };
-  }
-  console.info("Already granted allowances", alreadyGranted);
-  const outcome = await claimResourceAllowances();
-  console.info("Claim resource allowances outcome:", outcome);
-  
-  if (!outcome) {
-    console.warn(
-      "[permissions] failed to claim required resource allowances; host interactions may not work as expected",
-    );
-  }
-
   if (hostChainSupport.kind === "unsupported") {
     console.info(
       `[w3spay-admin] host does not advertise chain ${genesisHash}; using direct WS`,
     );
   }
-  console.info("Persisting granted allowances", alreadyGranted);
-  await persistGrantedAllowances(outcome);
+
+  // Resource allowances (Bulletin / SmartContract / AutoSigning / Statement)
+  // gate chain WRITES and feature use — NOT the admin-access READ that opens
+  // the gate. The host's `requestResourceAllocation` modal can take tens of
+  // seconds, and its outcome is only persisted here, never returned. Claim it
+  // detached so it never blocks `hostChainSupport` — the value that enables
+  // the is-admin query. Awaiting it stalls sign-in behind an unrelated modal.
+  claimResourceAllowancesInBackground();
 
   return { hostChainSupport, chainSubmitGrant };
+}
+
+function claimResourceAllowancesInBackground(): void {
+  void (async () => {
+    try {
+      if (await loadGrantedAllowances()) return;
+      const outcome = await claimResourceAllowances();
+      if (!outcome) {
+        console.warn(
+          "[permissions] failed to claim required resource allowances; host interactions may not work as expected",
+        );
+      }
+      await persistGrantedAllowances(outcome);
+    } catch (caught) {
+      console.warn("[allowances] background claim failed:", caught);
+    }
+  })();
 }

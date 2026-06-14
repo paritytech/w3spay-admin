@@ -5,7 +5,6 @@ import {
   connectToHost,
   enumValue,
   hostApi,
-  isInHost,
   requestPermission,
   runExclusiveHostModal,
 } from "@/shared/chain/host";
