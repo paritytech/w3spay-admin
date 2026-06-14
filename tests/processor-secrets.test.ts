@@ -241,4 +241,31 @@ describe("loadPublishedProcessorConfig", () => {
       }),
     ).rejects.toThrow(/HTTP 404/);
   });
+
+  it("reads via the host transport and never touches HTTPS", async () => {
+    const form = await formWithGeneratedSecret();
+    const bytes = new TextEncoder().encode(await publishedEnvelope(form, "pw"));
+    const fetchImpl = (() => {
+      throw new Error("HTTPS must not be used in a host");
+    }) as unknown as typeof fetch;
+    const bundle = await loadPublishedProcessorConfig({
+      groupId: "funkhaus-zola",
+      cid: "bafk-test",
+      passkey: "pw",
+      fetchImpl,
+      fetchPreimage: async () => ({ kind: "ok", bytes }),
+    });
+    expect(bundle).toEqual(buildProcessorBundle(form));
+  });
+
+  it("throws when the host preimage is unavailable", async () => {
+    await expect(
+      loadPublishedProcessorConfig({
+        groupId: "funkhaus-zola",
+        cid: "bafk-test",
+        passkey: "pw",
+        fetchPreimage: async () => ({ kind: "unavailable", reason: "timed out" }),
+      }),
+    ).rejects.toThrow(/timed out/);
+  });
 });

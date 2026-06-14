@@ -18,7 +18,7 @@ import { queryClient, REGISTRY_POLL_MS } from "@shared/chain/query-client.ts";
 
 // Envelope bodies are content-addressed by CID, so a body never changes
 // for a given CID. Cache decoded bodies across polls: each refetch then
-// only fetches genuinely new CIDs from the IPFS gateway.
+// only fetches genuinely new CIDs from Bulletin.
 const envelopeBodyCache = new Map<string, ItemConfig>();
 
 export interface ItemConfigRegistrySnapshot {
@@ -51,7 +51,7 @@ async function fetchRegistrySnapshot(): Promise<ItemConfigRegistrySnapshot> {
         updatedAt: record.updatedAt,
         snapshot: cachedBody ?? null,
       });
-      // Body already decoded for this CID → skip the gateway round-trip.
+      // Body already decoded for this CID → skip the Bulletin round-trip.
       if (cachedBody) return;
       const envelope = await fetchItemConfigEnvelope({ cid: record.cid, gatewayBase: gateway });
       if (envelope) {

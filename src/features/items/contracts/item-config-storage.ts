@@ -4,7 +4,11 @@
 import { preimageManager } from "@/shared/chain/host/index.ts";
 
 import { envConfig } from "@/config.ts";
-import { resolveNetwork } from "@shared/chain/host";
+import {
+  type FetchBulletinPreimage,
+  fetchBulletinPreimage,
+  resolveNetwork,
+} from "@shared/chain/host";
 import { isInHost } from "@shared/chain/host-connection.ts";
 import { publicKeyToSs58 } from "@shared/lib/address.ts";
 import {
@@ -51,6 +55,8 @@ export interface FetchItemConfigEnvelopeOptions {
   readonly gatewayBase: string;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
+  /** Host preimage fetch. Defaults to the real transport; tests stub it. */
+  readonly fetchPreimage?: FetchBulletinPreimage;
 }
 
 /** Minimal contract the publish flow needs — matches `preimageManager.submit`. */
@@ -135,11 +141,26 @@ export function gatewayUrlForCid(gatewayBase: string, cid: string): string {
 }
 
 /**
- * Fetch an envelope by CID from the configured IPFS gateway and decode
- * via the v1 decoder. Returns `null` on HTTP/decode failure (the caller
- * is the one that knows whether to retry vs. surface).
+ * Fetch an item-config envelope by CID and decode it via the v1 decoder.
+ *
+ * In a host, content is read over the host transport (`window.truapi`);
+ * an HTTPS IPFS gateway is used only as a standalone/dev fallback. Returns
+ * `null` on a miss or decode failure (the caller decides retry vs. surface).
  */
 export async function fetchItemConfigEnvelope(
+  opts: FetchItemConfigEnvelopeOptions,
+): Promise<W3SPayItemConfigEnvelopeV1 | null> {
+  const fetchPreimage = opts.fetchPreimage ?? fetchBulletinPreimage;
+  const pre = await fetchPreimage(opts.cid, { signal: opts.signal, timeoutMs: opts.timeoutMs });
+  if (pre.kind === "ok") return decodeItemConfigEnvelope(pre.bytes);
+  if (pre.kind === "unavailable") {
+    console.warn(`[bulletin] preimage unavailable for ${opts.cid}: ${pre.reason}`);
+    return null;
+  }
+  return fetchItemConfigEnvelopeViaGateway(opts);
+}
+
+async function fetchItemConfigEnvelopeViaGateway(
   opts: FetchItemConfigEnvelopeOptions,
 ): Promise<W3SPayItemConfigEnvelopeV1 | null> {
   const url = gatewayUrlForCid(opts.gatewayBase, opts.cid);

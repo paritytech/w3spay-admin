@@ -257,6 +257,33 @@ describe("loadProcessorReport", () => {
     });
     expect(result).toEqual({ kind: "invalid", reason: "unrecognized report format" });
   });
+
+  it("reads via the host transport and never touches HTTPS", async () => {
+    const bytes = new TextEncoder().encode(await envelopeJsonFor(DOC, "pass-1"));
+    const fetchImpl = (() => {
+      throw new Error("HTTPS must not be used in a host");
+    }) as unknown as typeof fetch;
+    const result = await loadProcessorReport({
+      groupId: "group-1",
+      cid: "bafk-cid",
+      passkey: "pass-1",
+      gatewayBase: GATEWAY,
+      fetchImpl,
+      fetchPreimage: async () => ({ kind: "ok", bytes }),
+    });
+    expect(result).toEqual({ kind: "ready", doc: DOC });
+  });
+
+  it("maps an unavailable host preimage to fetch-error", async () => {
+    const result = await loadProcessorReport({
+      groupId: "group-1",
+      cid: "bafk-cid",
+      passkey: "pass-1",
+      gatewayBase: GATEWAY,
+      fetchPreimage: async () => ({ kind: "unavailable", reason: "timed out" }),
+    });
+    expect(result).toEqual({ kind: "fetch-error", reason: "timed out" });
+  });
 });
 
 describe("formatReportAmount", () => {

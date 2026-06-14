@@ -3,6 +3,7 @@
 
 export * from "./networks.ts";
 export * from "./connection.ts";
+export * from "./bulletin-content.ts";
 export * from "./client.ts";
 export * from "./guarded-signer.ts";
 export * from "./resume-recovery.ts";

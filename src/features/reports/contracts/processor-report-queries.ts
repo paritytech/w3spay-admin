@@ -20,6 +20,7 @@ import {
   decryptCredentialEnvelope,
 } from "@shared/utils/wire/credential-envelope.ts";
 import { gatewayUrlForCid } from "@features/items/contracts/item-config-storage.ts";
+import { type FetchBulletinPreimage, fetchBulletinPreimage } from "@shared/chain/host";
 import {
   parseProcessorReportDoc,
   type ProcessorReportDoc,
@@ -59,49 +60,70 @@ export interface LoadProcessorReportArgs {
   readonly gatewayBase: string;
   /** Test seam — defaults to the global fetch. */
   readonly fetchImpl?: typeof fetch;
+  /** Host preimage fetch. Defaults to the real transport; tests stub it. */
+  readonly fetchPreimage?: FetchBulletinPreimage;
 }
 
 /**
- * Fetch an encrypted report envelope from the IPFS gateway, decrypt it with
- * the group passkey, and parse the `ProcessorReportDoc`. Never throws — every
- * failure maps to a result kind the row UI renders inline.
+ * Resolve an encrypted report envelope by CID, decrypt it with the group
+ * passkey, and parse the `ProcessorReportDoc`. In a host, content is read
+ * over the host transport (`window.truapi`); an HTTPS IPFS gateway is used
+ * only as a standalone/dev fallback. Never throws — every failure maps to a
+ * result kind the row UI renders inline.
  */
 export async function loadProcessorReport(
   args: LoadProcessorReportArgs,
 ): Promise<ProcessorReportLoadResult> {
-  const url = gatewayUrlForCid(args.gatewayBase, args.cid);
-  // Wrapped, not `?? fetch`: a detached `fetch` reference throws
-  // "Illegal invocation" in browsers (Window receiver lost).
-  const doFetch =
-    args.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+  const fetchPreimage = args.fetchPreimage ?? fetchBulletinPreimage;
+  const pre = await fetchPreimage(args.cid);
+  if (pre.kind === "ok") return decodeProcessorReport(pre.bytes, args.groupId, args.passkey);
+  if (pre.kind === "unavailable") return { kind: "fetch-error", reason: pre.reason };
 
-  let text: string;
+  const gateway = await fetchReportViaGateway(args.cid, args.gatewayBase, args.fetchImpl);
+  if (gateway.kind === "fetch-error") return gateway;
+  return decodeProcessorReport(gateway.bytes, args.groupId, args.passkey);
+}
+
+async function fetchReportViaGateway(
+  cid: string,
+  gatewayBase: string,
+  fetchImpl?: typeof fetch,
+): Promise<{ kind: "ok"; bytes: Uint8Array } | { kind: "fetch-error"; reason: string }> {
+  const url = gatewayUrlForCid(gatewayBase, cid);
+  // A detached `fetch` reference loses its Window receiver — wrap, don't alias.
+  const doFetch = fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   try {
     const response = await doFetch(url, { cache: "no-store" });
     if (!response.ok) {
       return { kind: "fetch-error", reason: `Gateway returned HTTP ${response.status}.` };
     }
-    text = await response.text();
+    return { kind: "ok", bytes: new Uint8Array(await response.arrayBuffer()) };
   } catch {
     return { kind: "fetch-error", reason: `Couldn't reach the IPFS gateway (${url}).` };
   }
-  if (text.length > MAX_REPORT_ENVELOPE_BYTES) {
+}
+
+async function decodeProcessorReport(
+  bytes: Uint8Array,
+  groupId: string,
+  passkey: string,
+): Promise<ProcessorReportLoadResult> {
+  if (bytes.length > MAX_REPORT_ENVELOPE_BYTES) {
     return { kind: "invalid", reason: "Envelope is unexpectedly large — refusing to process." };
   }
 
   let envelope: unknown;
   try {
-    envelope = JSON.parse(text) as unknown;
+    envelope = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
   } catch {
-    return { kind: "invalid", reason: "The gateway did not return a JSON envelope." };
+    return { kind: "invalid", reason: "Bulletin payload was not a JSON envelope." };
   }
 
   let plaintext: Uint8Array;
   try {
-    plaintext = await decryptCredentialEnvelope(envelope, args.passkey);
+    plaintext = await decryptCredentialEnvelope(envelope, passkey);
   } catch (caught) {
     if (caught instanceof CredentialEnvelopeError) {
-      // Wrong passkey and tampering are indistinguishable under AES-GCM.
       return { kind: "decrypt-error" };
     }
     return {
@@ -117,7 +139,7 @@ export async function loadProcessorReport(
     return { kind: "invalid", reason: "Decrypted payload is not JSON." };
   }
 
-  const doc = parseProcessorReportDoc(parsed, args.groupId);
+  const doc = parseProcessorReportDoc(parsed, groupId);
   if (doc == null) {
     return { kind: "invalid", reason: "unrecognized report format" };
   }

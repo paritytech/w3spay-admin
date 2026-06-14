@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // @paritytech
 
-import { envConfig } from "@/config.ts";
-import { resolveNetwork } from "@shared/chain/host";
 import {
   claimResourceAllowances,
   isInHost,
 } from "@shared/chain/host-connection.ts";
 import {
   checkHostChainSupport,
-  probeIpfsGateway,
   requestRemotePermission,
   type ChainSupport,
   type RemotePermissionOutcome,
@@ -75,6 +72,5 @@ export async function resolveHostPermissions(
   console.info("Persisting granted allowances", alreadyGranted);
   await persistGrantedAllowances(outcome);
 
-  void probeIpfsGateway(resolveNetwork(envConfig.chain.network).ipfsGateway);
   return { hostChainSupport, chainSubmitGrant };
 }

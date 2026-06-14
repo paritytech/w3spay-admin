@@ -90,20 +90,3 @@ export async function requestRemotePermission(
     ),
   );
 }
-
-export function probeIpfsGateway(gatewayBase: string): void {
-  if (gatewayBase.trim() === "") return;
-  if (!isInHost()) return;
-
-  void runExclusiveHostModal(async () => {
-    try {
-      await fetch(gatewayBase, { method: "HEAD", cache: "no-store" });
-    } catch (caught) {
-
-      console.info(
-        "[w3spay-admin] IPFS gateway probe (host-modal surfacer):",
-        caught,
-      );
-    }
-  });
-}

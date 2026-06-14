@@ -6,12 +6,15 @@ import {
   type EncryptedReportEnvelope,
 } from "@features/reports/encrypted-report.ts";
 import { gatewayUrlForCid } from "@features/items/contracts/item-config-storage.ts";
+import { type FetchBulletinPreimage, fetchBulletinPreimage } from "@shared/chain/host";
 
 export interface FetchReportOptions {
   readonly cid: string;
   readonly gatewayBase: string;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
+  /** Host preimage fetch. Defaults to the real transport; tests stub it. */
+  readonly fetchPreimage?: FetchBulletinPreimage;
 }
 
 export type FetchReportResult =
@@ -24,13 +27,36 @@ export type FetchReportResult =
 const FETCH_TIMEOUT_MS = 30_000;
 
 /**
- * GET `<gatewayBase>/ipfs/<cid>`, parse as JSON, and run through
- * `decodeEncryptedReportEnvelope`. The decode is intentionally inside
- * the success path: a bad envelope is `{ kind: "ok", envelope: { kind:
- * "invalid", ... } }` — the network request succeeded, the *content*
- * is unrecognised.
+ * Resolve an encrypted report envelope by CID and run it through
+ * `decodeEncryptedReportEnvelope`.
+ *
+ * In a host, content is read over the host transport (`window.truapi`); an
+ * HTTPS IPFS gateway is used only as a standalone/dev fallback. Decode runs
+ * inside the success path: a bad envelope is `{ kind: "ok", envelope: {
+ * kind: "invalid", ... } }` — the fetch succeeded, the *content* is
+ * unrecognised.
  */
 export async function fetchReportEnvelope(
+  opts: FetchReportOptions,
+): Promise<FetchReportResult> {
+  const fetchPreimage = opts.fetchPreimage ?? fetchBulletinPreimage;
+  const pre = await fetchPreimage(opts.cid, { signal: opts.signal, timeoutMs: opts.timeoutMs });
+  if (pre.kind === "ok") {
+    let json: unknown;
+    try {
+      json = JSON.parse(new TextDecoder().decode(pre.bytes)) as unknown;
+    } catch (caught) {
+      return { kind: "json-error", reason: caught instanceof Error ? caught.message : String(caught) };
+    }
+    return { kind: "ok", envelope: decodeEncryptedReportEnvelope(json) };
+  }
+  if (pre.kind === "unavailable") {
+    return { kind: "network-error", reason: pre.reason };
+  }
+  return fetchReportEnvelopeViaGateway(opts);
+}
+
+async function fetchReportEnvelopeViaGateway(
   opts: FetchReportOptions,
 ): Promise<FetchReportResult> {
   const url = gatewayUrlForCid(opts.gatewayBase, opts.cid);

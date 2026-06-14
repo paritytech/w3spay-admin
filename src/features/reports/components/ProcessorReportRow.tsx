@@ -135,7 +135,7 @@ function ExpandedBody({
   if (result == null) {
     return (
       <div style={{ paddingTop: 12, fontSize: 12, color: COLOR.muted }}>
-        Loading report from the IPFS gateway…
+        Loading report…
       </div>
     );
   }

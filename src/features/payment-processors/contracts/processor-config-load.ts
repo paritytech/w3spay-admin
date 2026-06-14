@@ -14,7 +14,11 @@
  * without v2 terminals all throw `PublishedConfigLoadError`.
  */
 import { envConfig } from "@/config.ts";
-import { resolveNetwork } from "@shared/chain/host";
+import {
+  type FetchBulletinPreimage,
+  fetchBulletinPreimage,
+  resolveNetwork,
+} from "@shared/chain/host";
 import {
   CredentialEnvelopeError,
   decryptCredentialEnvelope,
@@ -35,16 +39,32 @@ export interface LoadPublishedProcessorConfigOptions {
   readonly passkey: string;
   /** Test seam — defaults to the global fetch. */
   readonly fetchImpl?: typeof fetch;
+  /** Host preimage fetch. Defaults to the real transport; tests stub it. */
+  readonly fetchPreimage?: FetchBulletinPreimage;
 }
 
 export async function loadPublishedProcessorConfig(
   opts: LoadPublishedProcessorConfigOptions,
 ): Promise<ProcessorConfigBundle> {
-  const url = gatewayUrlForCid(resolveNetwork(envConfig.chain.network).ipfsGateway, opts.cid);
-  // Wrapped, not `?? fetch`: a detached `fetch` reference throws
-  // "Illegal invocation" in browsers (Window receiver lost).
-  const doFetch = opts.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+  const fetchPreimage = opts.fetchPreimage ?? fetchBulletinPreimage;
+  const pre = await fetchPreimage(opts.cid);
+  if (pre.kind === "ok") return decodeProcessorBundle(pre.bytes, opts.groupId, opts.passkey);
+  if (pre.kind === "unavailable") {
+    throw new PublishedConfigLoadError(
+      `Couldn't fetch Bulletin content for ${opts.cid}: ${pre.reason}`,
+    );
+  }
+  const bytes = await fetchEnvelopeViaGateway(opts.cid, opts.fetchImpl);
+  return decodeProcessorBundle(bytes, opts.groupId, opts.passkey);
+}
 
+async function fetchEnvelopeViaGateway(
+  cid: string,
+  fetchImpl?: typeof fetch,
+): Promise<Uint8Array> {
+  const url = gatewayUrlForCid(resolveNetwork(envConfig.chain.network).ipfsGateway, cid);
+  // A detached `fetch` reference loses its Window receiver — wrap, don't alias.
+  const doFetch = fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   let response: Response;
   try {
     response = await doFetch(url, { cache: "no-store" });
@@ -54,21 +74,28 @@ export async function loadPublishedProcessorConfig(
   if (!response.ok) {
     throw new PublishedConfigLoadError(`Gateway returned HTTP ${response.status} for ${url}.`);
   }
-  const text = await response.text();
-  if (text.length > MAX_ENVELOPE_BYTES) {
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function decodeProcessorBundle(
+  bytes: Uint8Array,
+  groupId: string,
+  passkey: string,
+): Promise<ProcessorConfigBundle> {
+  if (bytes.length > MAX_ENVELOPE_BYTES) {
     throw new PublishedConfigLoadError("Envelope is unexpectedly large — refusing to process.");
   }
 
   let envelope: unknown;
   try {
-    envelope = JSON.parse(text) as unknown;
+    envelope = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
   } catch {
-    throw new PublishedConfigLoadError("The gateway did not return a JSON envelope.");
+    throw new PublishedConfigLoadError("Bulletin payload was not a JSON envelope.");
   }
 
   let plaintext: Uint8Array;
   try {
-    plaintext = await decryptCredentialEnvelope(envelope, opts.passkey);
+    plaintext = await decryptCredentialEnvelope(envelope, passkey);
   } catch (caught) {
     if (caught instanceof CredentialEnvelopeError) {
       throw new PublishedConfigLoadError("Couldn't unlock — wrong passkey or tampered envelope.");
@@ -82,10 +109,10 @@ export async function loadPublishedProcessorConfig(
   } catch {
     throw new PublishedConfigLoadError("Decrypted payload is not JSON.");
   }
-  if (typeof bundle !== "object" || bundle === null || bundle.groupId !== opts.groupId) {
+  if (typeof bundle !== "object" || bundle === null || bundle.groupId !== groupId) {
     const got = (bundle as { groupId?: unknown } | null)?.groupId;
     throw new PublishedConfigLoadError(
-      `Decrypted bundle belongs to group "${typeof got === "string" ? got : "?"}", expected "${opts.groupId}".`,
+      `Decrypted bundle belongs to group "${typeof got === "string" ? got : "?"}", expected "${groupId}".`,
     );
   }
   if (!Array.isArray(bundle.v2?.terminals) || bundle.v2.terminals.length === 0) {
