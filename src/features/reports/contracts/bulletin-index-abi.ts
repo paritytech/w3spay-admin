@@ -3,7 +3,10 @@
 
 export const T3rminalBulletinIndexABI = [
   {
-    inputs: [{ internalType: "bytes32", name: "shopKey", type: "bytes32" }],
+    inputs: [
+      { internalType: "string", name: "merchantId", type: "string" },
+      { internalType: "string", name: "terminalId", type: "string" },
+    ],
     name: "getAllDates",
     outputs: [{ internalType: "string[]", name: "", type: "string[]" }],
     stateMutability: "view",
@@ -11,7 +14,8 @@ export const T3rminalBulletinIndexABI = [
   },
   {
     inputs: [
-      { internalType: "bytes32", name: "shopKey", type: "bytes32" },
+      { internalType: "string", name: "merchantId", type: "string" },
+      { internalType: "string", name: "terminalId", type: "string" },
       { internalType: "string", name: "date", type: "string" },
     ],
     name: "getMetadata",
@@ -21,6 +25,8 @@ export const T3rminalBulletinIndexABI = [
           { internalType: "string", name: "cid", type: "string" },
           { internalType: "uint256", name: "entryCount", type: "uint256" },
           { internalType: "uint256", name: "publishedAt", type: "uint256" },
+          { internalType: "string", name: "terminalId", type: "string" },
+          { internalType: "bool", name: "finalized", type: "bool" },
           { internalType: "bool", name: "exists", type: "bool" },
         ],
         internalType: "struct IT3rminalBulletinIndex.DayMetadata",
@@ -33,7 +39,8 @@ export const T3rminalBulletinIndexABI = [
   },
   {
     inputs: [
-      { internalType: "bytes32", name: "shopKey", type: "bytes32" },
+      { internalType: "string", name: "merchantId", type: "string" },
+      { internalType: "string", name: "terminalId", type: "string" },
       { internalType: "string", name: "date", type: "string" },
     ],
     name: "getCID",
@@ -42,7 +49,10 @@ export const T3rminalBulletinIndexABI = [
     type: "function",
   },
   {
-    inputs: [{ internalType: "bytes32", name: "shopKey", type: "bytes32" }],
+    inputs: [
+      { internalType: "string", name: "merchantId", type: "string" },
+      { internalType: "string", name: "terminalId", type: "string" },
+    ],
     name: "getReportCount",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
@@ -51,10 +61,12 @@ export const T3rminalBulletinIndexABI = [
   {
     anonymous: false,
     inputs: [
-      { indexed: true, internalType: "bytes32", name: "shopKey", type: "bytes32" },
-      { indexed: true, internalType: "string", name: "date", type: "string" },
+      { indexed: false, internalType: "string", name: "merchantId", type: "string" },
+      { indexed: false, internalType: "string", name: "terminalId", type: "string" },
+      { indexed: false, internalType: "string", name: "date", type: "string" },
       { indexed: false, internalType: "string", name: "cid", type: "string" },
       { indexed: false, internalType: "uint256", name: "entryCount", type: "uint256" },
+      { indexed: false, internalType: "bool", name: "finalized", type: "bool" },
       { indexed: false, internalType: "address", name: "writer", type: "address" },
     ],
     name: "DailyReportStored",

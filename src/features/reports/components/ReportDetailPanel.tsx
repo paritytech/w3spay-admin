@@ -6,9 +6,10 @@ import { useDecryptedReport } from "@features/reports/contracts/report-queries.t
 import { resolveNetwork } from "@shared/chain/host";
 import { gatewayUrlForCid } from "@features/items/contracts/item-config-storage.ts";
 import { shortAddr } from "@features/merchant/merchant-model.ts";
-import type {
-  DailyReport,
-  DailyReportTransaction,
+import {
+  dailyReportToCsv,
+  type DailyReport,
+  type DailyReportTransaction,
 } from "@features/reports/daily-report.ts";
 import type { ReportIndexEntry } from "@features/reports/contracts/bulletin-index-read.ts";
 import { Icon } from "@shared/components/Icon.tsx";
@@ -121,11 +122,7 @@ export function ReportDetailPanel({ entry, passwords, unlockNonce, onClose }: Re
           detail="The producer may be on a newer schema. Use 'Open IPFS' to inspect the raw envelope."
         />
       ) : (
-        <DecryptedReportBody
-          report={state.report}
-          gatewayHref={gatewayHref}
-          dateLabel={entry.date}
-        />
+        <DecryptedReportBody report={state.report} dateLabel={entry.date} />
       )}
 
       <div style={{ height: 10 }} />
@@ -135,14 +132,17 @@ export function ReportDetailPanel({ entry, passwords, unlockNonce, onClose }: Re
             window.open(gatewayHref, "_blank", "noopener");
           }}
         >
-          <Icon name="info" size={12} /> Open IPFS
+           Open IPFS
         </ASecondary>
         {state.kind === "ready" ? (
-          <ASecondary
-            onClick={() => downloadReportJson(entry.date, state.report)}
-          >
-            <Icon name="info" size={12} /> Download JSON
-          </ASecondary>
+          <>
+            <ASecondary onClick={() => downloadReportJson(entry.date, state.report)}>
+             Download JSON
+            </ASecondary>
+            <ASecondary onClick={() => downloadReportCsv(entry.date, state.report)}>
+              Download CSV
+            </ASecondary>
+          </>
         ) : null}
       </div>
     </ACard>
@@ -224,30 +224,22 @@ function ErrorBox({
 
 function DecryptedReportBody({
   report,
-  gatewayHref: _gatewayHref,
   dateLabel,
 }: {
   report: DailyReport;
-  gatewayHref: string;
   dateLabel: string;
 }) {
   return (
     <>
-      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-        <SummaryTile label="Transactions" value={String(report.totalTransactions)} />
-        <SummaryTile label="Network" value={report.network} />
-        <SummaryTile label="Finalized" value={report.dayFinalized ? "yes" : "no"} />
-      </div>
-
       <AEye>Transactions ({report.transactions.length})</AEye>
       {report.transactions.length === 0 ? (
         <div style={{ marginTop: 6, color: COLOR.text3, fontSize: 12 }}>
           The report has no transactions recorded for {dateLabel}.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+        <div style={{ marginTop: 8 }}>
           {report.transactions.map((tx) => (
-            <TransactionCard key={tx.saleId} tx={tx} />
+            <TransactionLine key={tx.saleId} tx={tx} />
           ))}
         </div>
       )}
@@ -255,91 +247,51 @@ function DecryptedReportBody({
   );
 }
 
-function SummaryTile({ label, value }: { label: string; value: string }) {
+function TransactionLine({ tx }: { tx: DailyReportTransaction }) {
+  const refunded = tx.status === "Refunded";
   return (
     <div
       style={{
-        flex: 1,
-        padding: 12,
-        background: COLOR.surface2,
-        border: `1px solid ${COLOR.border}`,
-        borderRadius: 10,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "6px 0",
+        borderBottom: `1px solid ${COLOR.surface2}`,
+        fontSize: 11.5,
       }}
     >
-      <div style={{ fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: COLOR.muted }}>
-        {label}
-      </div>
-      <div
+      <span style={{ color: COLOR.text3, flex: "0 0 auto" }}>{tx.timestampFormatted}</span>
+      <span
         style={{
-          marginTop: 4,
-          fontFamily: FONT.serif,
-          fontSize: 22,
-          color: COLOR.text,
-          letterSpacing: "-0.02em",
+          color: COLOR.text2,
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}
       >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function TransactionCard({ tx }: { tx: DailyReportTransaction }) {
-  const statusOk = tx.status === "Finished";
-  return (
-    <div
-      style={{
-        padding: 12,
-        background: COLOR.surface2,
-        border: `1px solid ${COLOR.border}`,
-        borderRadius: 10,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
-        <div style={{ fontFamily: FONT.mono, fontSize: 14, color: COLOR.text }}>
-          {tx.amountFormatted} {tx.asset}
-        </div>
+        {tx.saleId}
+      </span>
+      {refunded ? (
         <span
           style={{
+            color: COLOR.amberSoft,
+            flex: "0 0 auto",
             fontSize: 10,
-            letterSpacing: "0.14em",
+            letterSpacing: "0.08em",
             textTransform: "uppercase",
-            padding: "2px 7px",
-            borderRadius: 999,
-            background: statusOk ? "rgba(34,197,94,0.10)" : "rgba(245,158,11,0.10)",
-            color: statusOk ? COLOR.greenSoft : COLOR.amberSoft,
-            border: `1px solid ${statusOk ? "rgba(34,197,94,0.30)" : "rgba(245,158,11,0.30)"}`,
           }}
         >
-          {tx.status}
+          refund
         </span>
-      </div>
-      <div style={{ fontSize: 11, color: COLOR.text3 }}>
-        sale {tx.saleId}
-      </div>
-      {tx.items && tx.items.length > 0 ? (
-        <div style={{ marginTop: 8 }}>
-          {tx.items.map((item, idx) => (
-            <div
-              key={`${item.name}-${idx}`}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 11,
-                color: COLOR.text3,
-                padding: "2px 0",
-              }}
-            >
-              <span>
-                {item.quantity} × {item.name}
-              </span>
-              <AMono size={11} color={COLOR.text3} weight={400}>
-                {item.unitPrice}
-              </AMono>
-            </div>
-          ))}
-        </div>
       ) : null}
+      {tx.blockNumber ? (
+        <span style={{ color: COLOR.faint, flex: "0 0 auto" }}>#{tx.blockNumber}</span>
+      ) : null}
+      <AMono size={12} color={refunded ? COLOR.amberSoft : COLOR.text}>
+        {tx.amountFormatted} {tx.asset}
+      </AMono>
     </div>
   );
 }
@@ -349,5 +301,13 @@ function downloadReportJson(date: string, report: DailyReport): void {
     fileName: `daily-report-${date}.json`,
     content: JSON.stringify(report, null, 2),
     mimeType: "application/json",
+  });
+}
+
+function downloadReportCsv(date: string, report: DailyReport): void {
+  void exportFile({
+    fileName: `daily-report-${date}.csv`,
+    content: dailyReportToCsv(report),
+    mimeType: "text/csv",
   });
 }

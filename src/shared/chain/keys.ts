@@ -28,9 +28,6 @@ export const queryKeys = {
   decryptedReport: (cid: string, unlockNonce: number) =>
     ["decrypted-report", cid, unlockNonce] as const,
 
-  dailyReport: (shopKey: string, date: string, unlockNonce: number) =>
-    ["daily-report", shopKey.toLowerCase(), date, unlockNonce] as const,
-
   processorReportIndex: (groupId: string) => ["processor-report-index", groupId] as const,
 
   processorReport: (cid: string, unlockNonce: number) =>
@@ -50,7 +47,6 @@ export const queryRoots = {
   reportIndex: ["report-index"] as const,
   reportIndices: ["report-indices"] as const,
   tokenBalances: ["token-balances"] as const,
-  dailyReport: ["daily-report"] as const,
   processorReportIndex: ["processor-report-index"] as const,
   processorReport: ["processor-report"] as const,
   itemConfigRegistry: ["item-config-registry"] as const,

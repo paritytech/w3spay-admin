@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // @paritytech
 
+import { csvRow } from "@shared/utils/csv.ts";
+
 /**
  * The payment-processor report document — the cross-app wire contract for
  * X/Z reports published by `w3s-payment-processor`.
@@ -164,12 +166,6 @@ export function formatReportAmount(
   }
 }
 
-function escCsv(value: string): string {
-  return value.includes(",") || value.includes('"') || value.includes("\n")
-    ? `"${value.replaceAll('"', '""')}"`
-    : value;
-}
-
 /** Plain decimal token-unit string (BigInt split, trailing zeros trimmed) — no symbol. */
 function planckToDecimal(amountPlanck: string, decimals: number): string {
   try {
@@ -191,7 +187,7 @@ function planckToDecimal(amountPlanck: string, decimals: number): string {
 export function processorReportToCsv(doc: ProcessorReportDoc): string {
   const header = "payment_id,terminal_id,amount,token,amount_planck,block_number,observed_at,payer";
   const rows = doc.payments.map((p) =>
-    [
+    csvRow([
       p.paymentId,
       p.terminalId,
       p.amount,
@@ -200,9 +196,7 @@ export function processorReportToCsv(doc: ProcessorReportDoc): string {
       p.blockNumber != null ? String(p.blockNumber) : "",
       new Date(p.observedAtMs).toISOString(),
       p.fromHex ?? "",
-    ]
-      .map(escCsv)
-      .join(","),
+    ]),
   );
   return [header, ...rows].join("\n");
 }

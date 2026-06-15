@@ -24,8 +24,8 @@ export interface EnvConfig {
     readonly merchantRegistryAddress: string;
     /**
      * H160 address of the deployed `T3rminalBulletinIndex` contract (daily
-     * `(shopKey, date) -> CID` reports). An empty string disables the Reports
-     * surface; override via `VITE_T3RMINAL_BULLETIN_INDEX_ADDRESS`.
+     * `(merchantId, terminalId, date) -> CID` reports). An empty string disables
+     * the Reports surface; override via `VITE_T3RMINAL_BULLETIN_INDEX_ADDRESS`.
      */
     readonly t3rminalBulletinIndexAddress: string;
   };

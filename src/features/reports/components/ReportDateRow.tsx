@@ -2,6 +2,8 @@
 // @paritytech
 
 import type { ReportIndexEntry } from "@features/reports/contracts/bulletin-index-read.ts";
+import type { DecryptedReportLoadResult } from "@features/reports/contracts/report-queries.ts";
+import { formatDailyReportTotals, summarizeDailyReport } from "@features/reports/daily-report.ts";
 import { shortAddr } from "@features/merchant/merchant-model.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import { ACard, AMono } from "@shared/components/primitives.tsx";
@@ -9,10 +11,12 @@ import { COLOR, FONT } from "@shared/components/tokens.ts";
 
 export interface ReportDateRowProps {
   readonly entry: ReportIndexEntry;
+  readonly result: DecryptedReportLoadResult | undefined;
+  readonly locked: boolean;
   readonly onClick: () => void;
 }
 
-export function ReportDateRow({ entry, onClick }: ReportDateRowProps) {
+export function ReportDateRow({ entry, result, locked, onClick }: ReportDateRowProps) {
   const { date, metadata } = entry;
   const publishedAt = metadata.publishedAt > 0 ? new Date(metadata.publishedAt * 1000) : null;
   return (
@@ -56,8 +60,11 @@ export function ReportDateRow({ entry, onClick }: ReportDateRowProps) {
             </div>
           ) : null}
         </div>
-        <div style={{ alignSelf: "center", color: COLOR.text3 }}>
-          <Icon name="chevron-right" size={14} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto", alignSelf: "center" }}>
+          <RowSummary locked={locked} result={result} />
+          <span style={{ color: COLOR.text3 }}>
+            <Icon name="chevron-right" size={14} />
+          </span>
         </div>
       </div>
     </ACard>
@@ -67,4 +74,37 @@ export function ReportDateRow({ entry, onClick }: ReportDateRowProps) {
 function formatPublishedAt(d: Date): string {
   const iso = d.toISOString();
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)}Z`;
+}
+
+function RowSummary({
+  locked,
+  result,
+}: {
+  locked: boolean;
+  result: DecryptedReportLoadResult | undefined;
+}) {
+  if (locked) {
+    return <span style={{ fontSize: 11, color: COLOR.muted }}>Locked</span>;
+  }
+  if (result == null) {
+    return <span style={{ fontSize: 11, color: COLOR.muted }}>Decrypting…</span>;
+  }
+  if (result.kind === "ready") {
+    const totals = summarizeDailyReport(result.report);
+    return (
+      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+        <AMono size={14} color={COLOR.text}>
+          {formatDailyReportTotals(totals)}
+        </AMono>
+        <span style={{ fontSize: 11, color: COLOR.muted }}>
+          {totals.paymentCount} payment{totals.paymentCount === 1 ? "" : "s"}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span style={{ fontSize: 11, color: COLOR.redSoft }}>
+      {result.kind === "decrypt-error" ? "Wrong passcode" : "Unreadable"}
+    </span>
+  );
 }

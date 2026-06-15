@@ -7,7 +7,8 @@ import { W3SPayRegistryABI } from "@shared/chain/registry-abi.ts";
 const iface = new ethers.Interface(T3rminalBulletinIndexABI);
 const registryIface = new ethers.Interface(W3SPayRegistryABI);
 
-const SHOPKEY = ("0x" + "ab".repeat(32)) as `0x${string}`;
+const MERCHANT = "merchant-001";
+const TERMINAL = "t3r-abc123";
 const DATE = "2026-05-26";
 
 describe("T3rminalBulletinIndexABI shape", () => {
@@ -24,50 +25,59 @@ describe("T3rminalBulletinIndexABI shape", () => {
 });
 
 describe("T3rminalBulletinIndexABI encode/decode round-trips", () => {
-  it("getAllDates(bytes32) encodes and decodes back to the same shopKey", () => {
-    const data = iface.encodeFunctionData("getAllDates", [SHOPKEY]);
+  it("getAllDates(string,string) preserves merchantId and terminalId", () => {
+    const data = iface.encodeFunctionData("getAllDates", [MERCHANT, TERMINAL]);
     const decoded = iface.decodeFunctionData("getAllDates", data);
-    expect(decoded[0]?.toString().toLowerCase()).toBe(SHOPKEY);
+    expect(decoded[0]).toBe(MERCHANT);
+    expect(decoded[1]).toBe(TERMINAL);
   });
 
-  it("getMetadata(bytes32, string) preserves both args", () => {
-    const data = iface.encodeFunctionData("getMetadata", [SHOPKEY, DATE]);
+  it("getMetadata(string,string,string) preserves all three args", () => {
+    const data = iface.encodeFunctionData("getMetadata", [MERCHANT, TERMINAL, DATE]);
     const decoded = iface.decodeFunctionData("getMetadata", data);
-    expect(decoded[0]?.toString().toLowerCase()).toBe(SHOPKEY);
-    expect(decoded[1]).toBe(DATE);
+    expect(decoded[0]).toBe(MERCHANT);
+    expect(decoded[1]).toBe(TERMINAL);
+    expect(decoded[2]).toBe(DATE);
   });
 
-  it("getCID(bytes32, string) preserves both args", () => {
-    const data = iface.encodeFunctionData("getCID", [SHOPKEY, DATE]);
+  it("getCID(string,string,string) preserves all three args", () => {
+    const data = iface.encodeFunctionData("getCID", [MERCHANT, TERMINAL, DATE]);
     const decoded = iface.decodeFunctionData("getCID", data);
-    expect(decoded[0]?.toString().toLowerCase()).toBe(SHOPKEY);
-    expect(decoded[1]).toBe(DATE);
+    expect(decoded[0]).toBe(MERCHANT);
+    expect(decoded[1]).toBe(TERMINAL);
+    expect(decoded[2]).toBe(DATE);
   });
 
-  it("getReportCount(bytes32) encodes and decodes back", () => {
-    const data = iface.encodeFunctionData("getReportCount", [SHOPKEY]);
+  it("getReportCount(string,string) preserves merchantId and terminalId", () => {
+    const data = iface.encodeFunctionData("getReportCount", [MERCHANT, TERMINAL]);
     const decoded = iface.decodeFunctionData("getReportCount", data);
-    expect(decoded[0]?.toString().toLowerCase()).toBe(SHOPKEY);
+    expect(decoded[0]).toBe(MERCHANT);
+    expect(decoded[1]).toBe(TERMINAL);
   });
 
   it("decodes a synthetic getMetadata return tuple into the expected fields", () => {
     const cid = "bafytestcid";
     const entryCount = 7n;
     const publishedAt = 1716724800n;
+    const finalized = false;
     const exists = true;
 
     const encoded = iface.encodeFunctionResult("getMetadata", [
-      [cid, entryCount, publishedAt, exists],
+      [cid, entryCount, publishedAt, TERMINAL, finalized, exists],
     ]);
     const [decoded] = iface.decodeFunctionResult("getMetadata", encoded) as readonly [{
       readonly cid: string;
       readonly entryCount: bigint;
       readonly publishedAt: bigint;
+      readonly terminalId: string;
+      readonly finalized: boolean;
       readonly exists: boolean;
     }];
     expect(decoded.cid).toBe(cid);
     expect(decoded.entryCount).toBe(entryCount);
     expect(decoded.publishedAt).toBe(publishedAt);
+    expect(decoded.terminalId).toBe(TERMINAL);
+    expect(decoded.finalized).toBe(finalized);
     expect(decoded.exists).toBe(exists);
   });
 

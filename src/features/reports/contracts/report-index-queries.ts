@@ -9,6 +9,7 @@ import {
   fetchTerminalReportIndex,
   type TerminalReportIndex,
   type TerminalReportIndexState,
+  type TerminalReportRef,
 } from "./bulletin-index-read.ts";
 import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
 import { queryKeys, queryRoots } from "@shared/chain/keys.ts";
@@ -20,6 +21,7 @@ export type {
   ReportIndexEntry,
   TerminalReportIndex,
   TerminalReportIndexState,
+  TerminalReportRef,
 } from "./bulletin-index-read.ts";
 
 /**
@@ -35,22 +37,20 @@ export function bulletinIndexConfigured(): boolean {
   return envConfig.contracts.t3rminalBulletinIndexAddress.trim() !== "";
 }
 
-export function reportIndexQueryOptions(shopKey: `0x${string}` | null) {
+export function reportIndexQueryOptions(ref: TerminalReportRef | null) {
   return queryOptions({
-    queryKey: queryKeys.reportIndex(shopKey ?? ""),
+    queryKey: queryKeys.reportIndex(ref?.shopKey ?? ""),
     queryFn: (): Promise<TerminalReportIndex> => {
-      // `enabled` guarantees a non-null shopKey.
-      if (shopKey == null) {
-        throw new Error("reportIndexQueryOptions: shopKey is null");
+      if (ref == null) {
+        throw new Error("reportIndexQueryOptions: ref is null");
       }
-      // Demo terminals exist but have produced no reports yet — hand back
-      // the empty index the demo surface renders as its standard state.
+      // Demo terminals exist but have no on-chain reports.
       if (isDemoMode()) {
-        return Promise.resolve({ shopKey, count: 0, entries: [] });
+        return Promise.resolve({ shopKey: ref.shopKey, count: 0, entries: [] });
       }
-      return fetchTerminalReportIndex(shopKey);
+      return fetchTerminalReportIndex(ref);
     },
-    enabled: shopKey != null,
+    enabled: ref != null,
   });
 }
 
@@ -61,15 +61,15 @@ export function reportIndexQueryOptions(shopKey: `0x${string}` | null) {
  * otherwise the usual loading / ready / error progression.
  */
 export function useT3rminalReportIndex(
-  shopKey: `0x${string}` | null,
+  ref: TerminalReportRef | null,
 ): TerminalReportIndexState {
-  const query = useQuery(reportIndexQueryOptions(shopKey));
+  const query = useQuery(reportIndexQueryOptions(ref));
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryRoots.reportIndex });
   }, []);
 
-  if (shopKey == null) {
+  if (ref == null) {
     return { kind: "idle" };
   }
   if (!isDemoMode() && !bulletinIndexConfigured()) {
@@ -107,17 +107,17 @@ export interface AllTerminalReportIndicesState {
  * resolve; `state` is `ready` once none remain pending.
  */
 export function useAllTerminalReportIndices(
-  shopKeys: ReadonlyArray<`0x${string}`>,
+  refs: ReadonlyArray<TerminalReportRef>,
 ): AllTerminalReportIndicesState {
   const results = useQueries({
-    queries: shopKeys.map((shopKey) => reportIndexQueryOptions(shopKey)),
+    queries: refs.map((ref) => reportIndexQueryOptions(ref)),
   });
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryRoots.reportIndex });
   }, []);
 
-  if (shopKeys.length === 0) {
+  if (refs.length === 0) {
     return { state: "ready", reason: null, indices: EMPTY_INDICES, refresh };
   }
   if (!isDemoMode() && !bulletinIndexConfigured()) {
@@ -131,14 +131,14 @@ export function useAllTerminalReportIndices(
 
   const indices = new Map<`0x${string}`, TerminalReportIndex | null>();
   let pending = false;
-  for (let i = 0; i < shopKeys.length; i += 1) {
+  for (let i = 0; i < refs.length; i += 1) {
     const result = results[i];
-    const shopKey = shopKeys[i];
-    if (result == null || shopKey == null) continue;
+    const ref = refs[i];
+    if (result == null || ref == null) continue;
     if (result.isError) {
-      indices.set(shopKey, null);
+      indices.set(ref.shopKey, null);
     } else if (result.data != null) {
-      indices.set(shopKey, result.data);
+      indices.set(ref.shopKey, result.data);
     } else {
       pending = true;
     }

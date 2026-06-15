@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // @paritytech
 
+import { csvRow } from "@shared/utils/csv.ts";
+
 export interface DailyReportItem {
   readonly name: string;
   readonly quantity: number;
@@ -145,4 +147,78 @@ function parseItems(raw: ReadonlyArray<unknown>): ReadonlyArray<DailyReportItem>
     }
   }
   return out.length > 0 ? out : undefined;
+}
+
+/**
+ * Spreadsheet export — one CSV row per transaction, flat columns only
+ * (itemised lines stay in the JSON export). Mirrors `processorReportToCsv`
+ * so books reconcile across report kinds.
+ */
+export function dailyReportToCsv(report: DailyReport): string {
+  const header =
+    "sale_id,status,terminal_id,asset,amount,amount_formatted,block_number,timestamp,tx_hash,evm_merchant,evm_customer,refund_of";
+  const rows = report.transactions.map((tx) =>
+    csvRow([
+      tx.saleId,
+      tx.status,
+      tx.terminalId,
+      tx.asset,
+      tx.amount,
+      tx.amountFormatted,
+      tx.blockNumber,
+      isoFromMillis(tx.timestamp),
+      tx.txHash,
+      tx.evmMerchant,
+      tx.evmCustomer,
+      tx.refundOf ?? "",
+    ]),
+  );
+  return [header, ...rows].join("\n");
+}
+
+/** Producer timestamps are unix-millis strings; render ISO when parseable. */
+function isoFromMillis(raw: string): string {
+  const ms = Number(raw);
+  return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : raw;
+}
+
+export interface DailyReportAssetTotal {
+  readonly asset: string;
+  /** Summed Finished amount in display units. */
+  readonly total: number;
+}
+
+export interface DailyReportTotals {
+  /** Count of completed (Finished) payments — refunds excluded. */
+  readonly paymentCount: number;
+  /** Finished amount summed per asset symbol, largest first. */
+  readonly totalsByAsset: ReadonlyArray<DailyReportAssetTotal>;
+}
+
+/**
+ * Roll a day's transactions up to the headline figures shown on the saved-day
+ * card: how many payments completed and how much was taken per asset. Only
+ * `Finished` rows count (refunds are neither a payment nor cash taken); a
+ * non-numeric `amountFormatted` is skipped rather than poisoning the sum.
+ */
+export function summarizeDailyReport(report: DailyReport): DailyReportTotals {
+  const totals = new Map<string, number>();
+  let paymentCount = 0;
+  for (const tx of report.transactions) {
+    if (tx.status !== "Finished") continue;
+    paymentCount += 1;
+    const amount = Number(tx.amountFormatted);
+    if (!Number.isFinite(amount)) continue;
+    totals.set(tx.asset, (totals.get(tx.asset) ?? 0) + amount);
+  }
+  const totalsByAsset = [...totals.entries()]
+    .map(([asset, total]) => ({ asset, total }))
+    .sort((a, b) => b.total - a.total);
+  return { paymentCount, totalsByAsset };
+}
+
+/** Render per-asset totals as a compact `12.50 CASH · 3.00 EUR` string. */
+export function formatDailyReportTotals(totals: DailyReportTotals): string {
+  if (totals.totalsByAsset.length === 0) return "—";
+  return totals.totalsByAsset.map((t) => `${t.total.toFixed(2)} ${t.asset}`).join(" · ");
 }

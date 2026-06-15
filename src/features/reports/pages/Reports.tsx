@@ -4,28 +4,23 @@
 import { useMemo, useState } from "react";
 
 import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
-import { envConfig } from "@/config";
-import { resolveNetwork } from "@shared/chain/host";
 import {
   useAllTerminalReportIndices,
-  type TerminalReportIndex,
+  type TerminalReportRef,
 } from "@features/reports/contracts/report-index-queries.ts";
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import { useT3rminalAssignments } from "@shared/store/use-assignments-store.ts";
-import type { TransactionsStreamTerminal } from "@features/reports/transaction-stream.ts";
 import { ACard, AHead } from "@shared/components/primitives.tsx";
 import { COLOR } from "@shared/components/tokens.ts";
 import { SegmentedChips } from "@features/reports/components/SegmentedChips.tsx";
 import { TerminalsList } from "@features/reports/components/TerminalsList.tsx";
-import { TransactionsView } from "@features/reports/components/TransactionsView.tsx";
 import { ProcessorGroupsList } from "@features/reports/components/ProcessorGroupsList.tsx";
 
-type TopViewId = "transactions" | "days" | "processors";
+type TopViewId = "processors" | "terminals";
 
 const TOP_VIEWS = [
-  { id: "transactions" as const, label: "Transactions" },
-  { id: "days" as const, label: "Daily reports" },
-  { id: "processors" as const, label: "Processors" },
+  { id: "processors" as const, label: "Payment Processor Reports" },
+  { id: "terminals" as const, label: "T3rminal Reports" },
 ];
 
 export function Reports() {
@@ -36,21 +31,19 @@ export function Reports() {
     () => merchants.filter((m): m is AdminMerchant => m.kind === "t3rminal"),
     [merchants],
   );
-  const shopKeys = useMemo(
-    () => terminals.map((m) => m.key.toLowerCase() as `0x${string}`),
+  const refs = useMemo<ReadonlyArray<TerminalReportRef>>(
+    () =>
+      terminals.map((m) => ({
+        shopKey: m.key.toLowerCase() as `0x${string}`,
+        merchantId: m.merchantId,
+        terminalId: m.terminalId,
+      })),
     [terminals],
   );
 
-  const aggregate = useAllTerminalReportIndices(shopKeys);
+  const aggregate = useAllTerminalReportIndices(refs);
 
-  const [view, setView] = useState<TopViewId>("transactions");
-
-  const gatewayBase = resolveNetwork(envConfig.chain.network).ipfsGateway;
-
-  const streamTerminals = useMemo<ReadonlyArray<TransactionsStreamTerminal>>(
-    () => buildStreamTerminals(terminals, aggregate.indices, assignments),
-    [terminals, aggregate.indices, assignments],
-  );
+  const [view, setView] = useState<TopViewId>("processors");
 
   return (
     <>
@@ -76,13 +69,6 @@ export function Reports() {
             </div>
           </ACard>
         </div>
-      ) : view === "transactions" ? (
-        <TransactionsView
-          terminals={streamTerminals}
-          hideTerminalColumn={false}
-          gatewayBase={gatewayBase}
-          indexReady={aggregate.state === "ready"}
-        />
       ) : (
         <TerminalsList
           terminals={terminals}
@@ -93,30 +79,4 @@ export function Reports() {
       )}
     </>
   );
-}
-
-function buildStreamTerminals(
-  terminals: ReadonlyArray<AdminMerchant>,
-  indices: ReadonlyMap<`0x${string}`, TerminalReportIndex | null>,
-  assignments: ReadonlyMap<string, { reportPassword: string }>,
-): ReadonlyArray<TransactionsStreamTerminal> {
-  const out: TransactionsStreamTerminal[] = [];
-  for (const m of terminals) {
-    const shopKey = m.key.toLowerCase() as `0x${string}`;
-    const index = indices.get(shopKey);
-    const entries = index?.entries ?? [];
-    const reportPassword = assignments.get(m.key)?.reportPassword ?? null;
-    out.push({
-      terminal: {
-        key: m.key,
-        name: m.name,
-        terminalId: m.terminalId,
-      },
-      shopKey,
-      reportPasswords: reportPassword != null ? [reportPassword] : [],
-      unlockNonce: 0,
-      entries,
-    });
-  }
-  return out;
 }

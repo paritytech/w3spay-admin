@@ -4,11 +4,11 @@
 /**
  * One processor group's published Z reports. The on-chain index (seq, CID,
  * size, committed time) is public; the report bodies are AES-encrypted with
- * the group passkey, so viewing requires entering it here. The passkey lives
- * in component state only — deliberately never persisted (mirrors the
- * config editor's unlock flow).
+ * the group passkey, so viewing requires entering it here. Once a report
+ * decrypts, the verified passkey is cached in the operator's host KV so
+ * revisiting the group auto-unlocks; an explicit Lock clears it.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -26,6 +26,7 @@ import { ProcessorReportRow } from "@features/reports/components/ProcessorReport
 import { Icon } from "@shared/components/Icon.tsx";
 import { ACard, AGhost, AHead, ASecondary } from "@shared/components/primitives.tsx";
 import { COLOR } from "@shared/components/tokens.ts";
+import { useProcessorReportPasskeyCache } from "@features/payment-processors/store/use-processor-report-passkey-cache.ts";
 
 export interface ReportsProcessorGroupProps {
   readonly groupId: string;
@@ -46,6 +47,22 @@ export function ReportsProcessorGroup({ groupId }: ReportsProcessorGroupProps) {
   // rows — the passkey itself never enters a query key.
   const [unlockNonce, setUnlockNonce] = useState(0);
 
+  const passkeyCache = useProcessorReportPasskeyCache();
+  const [autoTried, setAutoTried] = useState(false);
+
+  // Auto-unlock once after hydration if this device already verified a passkey
+  // for the group. The `autoTried` guard fires at most once so a later Lock is
+  // never auto-undone within the session.
+  useEffect(() => {
+    if (autoTried || !passkeyCache.hydrated) return;
+    setAutoTried(true);
+    const cached = passkeyCache.getPasskey(groupId);
+    if (cached != null && cached.length > 0) {
+      setUnlockedPasskey(cached);
+      setUnlockNonce((n) => n + 1);
+    }
+  }, [autoTried, passkeyCache.hydrated, passkeyCache, groupId]);
+
   const gatewayBase = resolveNetwork(envConfig.chain.network).ipfsGateway;
   const locked = unlockedPasskey == null;
 
@@ -61,6 +78,15 @@ export function ReportsProcessorGroup({ groupId }: ReportsProcessorGroupProps) {
   });
 
   const results = reportQueries.map((q) => q.data);
+
+  const anyReady = results.some((r) => r != null && r.kind === "ready");
+  // Persist the passkey only after ≥1 report actually decrypts, which verifies
+  // it is correct for this group. A group with zero reports never caches.
+  useEffect(() => {
+    if (unlockedPasskey == null || !anyReady) return;
+    if (passkeyCache.getPasskey(groupId) === unlockedPasskey) return;
+    passkeyCache.savePasskey(groupId, unlockedPasskey);
+  }, [unlockedPasskey, anyReady, passkeyCache, groupId]);
   const allDecryptFailed =
     entries.length > 0 &&
     results.length === entries.length &&
@@ -82,7 +108,8 @@ export function ReportsProcessorGroup({ groupId }: ReportsProcessorGroupProps) {
         <ACard padding={14}>
           <div style={{ fontSize: 12, color: COLOR.text3, lineHeight: 1.55, marginBottom: 10 }}>
             Reports are encrypted with the group passkey — the same one the processor app unlocks
-            with. Enter it to decrypt. It is kept in memory only and never stored.
+            with. Enter it to decrypt. Once it decrypts a report it is saved on this device so you
+            won't be asked again — use Lock to clear it.
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ flex: 1 }}>
@@ -105,7 +132,14 @@ export function ReportsProcessorGroup({ groupId }: ReportsProcessorGroupProps) {
           <span style={{ fontSize: 12, color: COLOR.muted }}>
             Reports unlocked for this session.
           </span>
-          <AGhost onClick={() => setUnlockedPasskey(null)}>Lock</AGhost>
+          <AGhost
+            onClick={() => {
+              setUnlockedPasskey(null);
+              passkeyCache.removePasskey(groupId);
+            }}
+          >
+            Lock
+          </AGhost>
         </div>
       )}
 

@@ -24,19 +24,6 @@ describe("query keys", () => {
     ]);
   });
 
-  it("daily-report key lowercases the shopKey so casing can't fork the cache", () => {
-    expect(queryKeys.dailyReport("0xAbC", "2026-06-01", 0)).toEqual([
-      "daily-report",
-      "0xabc",
-      "2026-06-01",
-      0,
-    ]);
-    // The unlock nonce forks the cache key so a corrected passcode refetches.
-    expect(queryKeys.dailyReport("0xabc", "2026-06-01", 1)).not.toEqual(
-      queryKeys.dailyReport("0xabc", "2026-06-01", 0),
-    );
-  });
-
   it("addressSetKey is order-independent", () => {
     const a = "0x11" as AccountId32Hex;
     const b = "0x22" as AccountId32Hex;
@@ -47,7 +34,6 @@ describe("query keys", () => {
     expect(queryKeys.tokenBalances("k")[0]).toBe(queryRoots.tokenBalances[0]);
     expect(queryKeys.itemConfigRegistry("acc")[0]).toBe(queryRoots.itemConfigRegistry[0]);
     expect(queryKeys.reportIndex("shop")[0]).toBe(queryRoots.reportIndex[0]);
-    expect(queryKeys.dailyReport("shop", "date", 0)[0]).toBe(queryRoots.dailyReport[0]);
     expect(queryKeys.isAdmin(null, "r")[0]).toBe(queryRoots.isAdmin[0]);
     expect(queryKeys.isSuperAdmin(null, "r")[0]).toBe(queryRoots.isSuperAdmin[0]);
   });

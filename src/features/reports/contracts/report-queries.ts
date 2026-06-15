@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // @paritytech
 
-import { queryOptions, useQueries, useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 
-import { fetchReportEnvelope, type FetchReportResult } from "./fetch-report.ts";
+import { fetchReportEnvelope } from "./fetch-report.ts";
 import { parseDailyReport, type DailyReport } from "@features/reports/daily-report.ts";
 import {
   decryptReportV2,
@@ -14,51 +14,8 @@ import {
   type EncryptedReportMeta,
   type UseDecryptedReportArgs,
 } from "@features/reports/encrypted-report.ts";
-import {
-  flattenReports,
-  datesInWindow,
-  windowSinceMs,
-  type ReportBucket,
-  type TerminalRef,
-  type TransactionsStreamFailure,
-  type TransactionsStreamLoadState,
-  type TransactionsStreamMissingPassword,
-  type TransactionsStreamTerminal,
-  type UseTransactionsStreamArgs,
-  type UseTransactionsStreamResult,
-} from "@features/reports/transaction-stream.ts";
 import { queryKeys } from "@shared/chain/keys.ts";
 import { queryClient } from "@shared/chain/query-client.ts";
-
-// ── Concurrency cap ────────────────────────────────────────────────
-
-/** Cap on concurrent IPFS fetches. */
-export const MAX_CONCURRENCY = 6;
-
-let active = 0;
-const waiters: Array<() => void> = [];
-
-/** Acquire a fetch slot, queueing when the cap is reached. */
-function acquire(): Promise<void> {
-  if (active < MAX_CONCURRENCY) {
-    active += 1;
-    return Promise.resolve();
-  }
-  const { promise, resolve } = Promise.withResolvers<void>();
-  waiters.push(resolve);
-  return promise;
-}
-
-/** Release a fetch slot, handing it straight to the next waiter if any. */
-function release(): void {
-  const next = waiters.shift();
-  if (next != null) {
-    // Slot transferred without decrementing — the waiter takes it over.
-    next();
-    return;
-  }
-  active -= 1;
-}
 
 // ── Shared decrypt-error formatting ────────────────────────────────
 
@@ -96,250 +53,6 @@ function decryptWithCandidates(
     }
   }
   return { ok: false, reason };
-}
-
-// ── Daily-report load (transactions stream) ────────────────────────
-
-/**
- * Categorized result of loading one day's report. Mirrors
- * `CachedDayState` minus the synthetic `idle` / `no-password` / `loading`
- * markers — those are represented by the query being disabled or pending.
- */
-export type DailyReportLoadResult =
-  | { readonly kind: "ready"; readonly report: DailyReport }
-  | { readonly kind: "legacy-v1" }
-  | { readonly kind: "fetch-error"; readonly reason: string }
-  | { readonly kind: "decrypt-error"; readonly reason: string }
-  | { readonly kind: "parse-error" }
-  | { readonly kind: "invalid"; readonly reason: string };
-
-/**
- * Fetch (inside the semaphore) then decrypt + parse one day's report.
- * Never throws — resolves to a {@link DailyReportLoadResult} so the
- * stream can treat every outcome as "this day will not change again".
- */
-export async function loadDailyReport(
-  cid: string,
-  passwords: ReadonlyArray<string>,
-  gatewayBase: string,
-): Promise<DailyReportLoadResult> {
-  await acquire();
-  let result: FetchReportResult;
-  try {
-    result = await fetchReportEnvelope({ cid, gatewayBase });
-  } finally {
-    release();
-  }
-
-  if (result.kind === "http-error") {
-    return { kind: "fetch-error", reason: `HTTP ${result.status} ${result.statusText}` };
-  }
-  if (result.kind === "network-error" || result.kind === "json-error") {
-    return { kind: "fetch-error", reason: result.reason };
-  }
-  const envelope = result.envelope;
-  if (envelope.kind === "invalid") {
-    return { kind: "invalid", reason: envelope.reason };
-  }
-  if (envelope.kind === "legacy-v1") {
-    return { kind: "legacy-v1" };
-  }
-  // envelope.kind === "v2"
-  const decrypted = decryptWithCandidates(envelope.envelope, passwords);
-  if (!decrypted.ok) {
-    return { kind: "decrypt-error", reason: decrypted.reason };
-  }
-  let json: unknown;
-  try {
-    json = JSON.parse(decrypted.plaintext);
-  } catch {
-    return { kind: "parse-error" };
-  }
-  const report = parseDailyReport(json);
-  if (report == null) {
-    return { kind: "parse-error" };
-  }
-  return { kind: "ready", report };
-}
-
-export interface DailyReportQueryArgs {
-  readonly shopKey: `0x${string}`;
-  readonly date: string;
-  readonly cid: string;
-  /** Candidate passphrases; empty keeps the query disabled (stream derives `no-password`). */
-  readonly passwords: ReadonlyArray<string>;
-  readonly unlockNonce: number;
-  readonly gatewayBase: string;
-}
-
-export function dailyReportQueryOptions(args: DailyReportQueryArgs) {
-  const { shopKey, date, cid, passwords, unlockNonce, gatewayBase } = args;
-  return queryOptions({
-    queryKey: queryKeys.dailyReport(shopKey, date, unlockNonce),
-    queryFn: (): Promise<DailyReportLoadResult> => loadDailyReport(cid, passwords, gatewayBase),
-    enabled: passwords.length > 0,
-  });
-}
-
-// ── Transactions stream ────────────────────────────────────────────
-
-interface StreamJob {
-  readonly shopKey: `0x${string}`;
-  readonly date: string;
-  readonly cid: string;
-  readonly passwords: ReadonlyArray<string>;
-  readonly unlockNonce: number;
-  readonly terminalRef: TerminalRef;
-}
-
-/**
- * Windowed, progressively-decrypting transaction stream across one or
- * many terminals. Owns `now` so flipping the window doesn't drift the
- * boundary; `refresh` advances it. Fans out one daily-report query per
- * (terminal × in-window date) job via `useQueries`, then derives the
- * flattened stream plus load/failure/missing-password bookkeeping.
- */
-export function useTransactionsStream(
-  args: UseTransactionsStreamArgs,
-): UseTransactionsStreamResult {
-  const { terminals, gatewayBase } = args;
-  const streamWindow = args.window;
-
-  const [now, setNow] = useState<number>(() => Date.now());
-  const refresh = useCallback(() => setNow(Date.now()), []);
-
-  const jobs = useMemo<ReadonlyArray<StreamJob>>(() => {
-    const out: StreamJob[] = [];
-    for (const t of terminals) {
-      if (t.entries.length === 0) continue;
-      const dateSet = new Set(
-        datesInWindow(
-          t.entries.map((e) => e.date),
-          streamWindow,
-          now,
-        ),
-      );
-      for (const entry of t.entries) {
-        if (!dateSet.has(entry.date)) continue;
-        out.push({
-          shopKey: t.shopKey,
-          date: entry.date,
-          cid: entry.metadata.cid,
-          passwords: t.reportPasswords,
-          unlockNonce: t.unlockNonce,
-          terminalRef: t.terminal,
-        });
-      }
-    }
-    return out;
-  }, [terminals, streamWindow, now]);
-
-  const results = useQueries({
-    queries: jobs.map((job) =>
-      dailyReportQueryOptions({
-        shopKey: job.shopKey,
-        date: job.date,
-        cid: job.cid,
-        passwords: job.passwords,
-        unlockNonce: job.unlockNonce,
-        gatewayBase,
-      }),
-    ),
-  });
-
-  const sinceMs = useMemo(() => windowSinceMs(streamWindow, now), [streamWindow, now]);
-
-  // `dataFingerprint` is the recompute cursor: each query's
-  // `dataUpdatedAt` bumps when its result lands, so the derived snapshot
-  // recomputes as days resolve without depending on the unstable
-  // `results` array identity.
-  const dataFingerprint = results.map((r) => r.dataUpdatedAt).join(",");
-
-  const snapshot = useMemo(() => {
-    const buckets: ReportBucket[] = [];
-    const failures: TransactionsStreamFailure[] = [];
-    let loaded = 0;
-    for (let i = 0; i < jobs.length; i += 1) {
-      const job = jobs[i];
-      if (job == null) continue;
-      if (job.passwords.length === 0) {
-        // `no-password` counts as loaded, never a failure.
-        loaded += 1;
-        continue;
-      }
-      const data = results[i]?.data;
-      if (data == null) {
-        // Query pending — not loaded yet.
-        continue;
-      }
-      loaded += 1;
-      if (data.kind === "ready") {
-        buckets.push({ terminal: job.terminalRef, date: job.date, report: data.report });
-      } else {
-        failures.push({
-          terminalKey: job.terminalRef.key,
-          terminalName: job.terminalRef.name,
-          date: job.date,
-          kind: data.kind,
-          reason: reasonOf(data),
-        });
-      }
-    }
-    const transactions = flattenReports(buckets, sinceMs);
-    const missingPasswordTerminals = collectMissingPassword(terminals);
-    const totalDays = jobs.length;
-    let loadState: TransactionsStreamLoadState;
-    if (totalDays === 0 || loaded >= totalDays) loadState = "ready";
-    else if (loaded > 0) loadState = "partial";
-    else loadState = "loading";
-    return {
-      state: loadState,
-      transactions,
-      sinceMs,
-      now,
-      totalDays,
-      loadedDays: loaded,
-      failures,
-      missingPasswordTerminals,
-    };
-    // `dataFingerprint` is the external cursor — `results` is read but
-    // intentionally not a dep so the memo recomputes only when data lands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, sinceMs, terminals, now, dataFingerprint]);
-
-  return { ...snapshot, refresh };
-}
-
-/** Human-readable reason for a non-ready daily-report load result. */
-function reasonOf(result: DailyReportLoadResult): string {
-  switch (result.kind) {
-    case "fetch-error":
-    case "decrypt-error":
-    case "invalid":
-      return result.reason;
-    case "parse-error":
-      return "payload didn't match the daily-report shape";
-    case "legacy-v1":
-      return "legacy v1 envelope — admin cannot decrypt";
-    default:
-      return "";
-  }
-}
-
-/**
- * Terminals that have index entries but no QR-shared report password —
- * the stream surfaces these so the UI can prompt for the missing QR.
- */
-function collectMissingPassword(
-  terminals: ReadonlyArray<TransactionsStreamTerminal>,
-): ReadonlyArray<TransactionsStreamMissingPassword> {
-  const out: TransactionsStreamMissingPassword[] = [];
-  for (const t of terminals) {
-    if (t.reportPasswords.length > 0) continue;
-    if (t.entries.length === 0) continue;
-    out.push({ key: t.terminal.key, name: t.terminal.name });
-  }
-  return out;
 }
 
 // ── Single decrypted report (detail panel) ─────────────────────────
@@ -416,6 +129,9 @@ export function decryptedReportQueryOptions(
       return loadDecryptedReport(cid, passwords, gatewayBase);
     },
     enabled: cid != null && passwords.length > 0,
+    // Reports are immutable content-addressed documents — the saved-days list
+    // fans these out per day, so don't refetch on every remount.
+    staleTime: Infinity,
   });
 }
 

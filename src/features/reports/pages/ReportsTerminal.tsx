@@ -5,18 +5,23 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useMerchants } from "@features/merchant/contracts/use-merchants.ts";
 import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
+import { useQueries } from "@tanstack/react-query";
 import { envConfig } from "@/config";
 import { resolveNetwork } from "@shared/chain/host";
 import {
   useT3rminalReportIndex,
   type ReportIndexEntry,
   type TerminalReportIndexState,
+  type TerminalReportRef,
 } from "@features/reports/contracts/report-index-queries.ts";
+import {
+  decryptedReportQueryOptions,
+  type DecryptedReportLoadResult,
+} from "@features/reports/contracts/report-queries.ts";
 import type { AdminMerchant } from "@features/merchant/merchant-model.ts";
 import type { T3rminalAssignmentV1 } from "@shared/store/t3rminal-assignments.ts";
 import { useT3rminalAssignments } from "@shared/store/use-assignments-store.ts";
 import { deriveReportPasswordFromPasscode } from "@shared/lib/t3rminal-config-qr.ts";
-import type { TransactionsStreamTerminal } from "@features/reports/transaction-stream.ts";
 import { Icon } from "@shared/components/Icon.tsx";
 import {
   ACard,
@@ -30,11 +35,7 @@ import { COLOR } from "@shared/components/tokens.ts";
 import { ReportDateRow } from "@features/reports/components/ReportDateRow.tsx";
 import { ReportDetailPanel } from "@features/reports/components/ReportDetailPanel.tsx";
 import { PasskeyInput } from "@features/payment-processors/components/PasskeyInput.tsx";
-import {
-  ReportsViewToggle,
-  type ReportsViewId,
-} from "@features/reports/components/ReportsViewToggle.tsx";
-import { TransactionsView } from "@features/reports/components/TransactionsView.tsx";
+import { useTerminalReportPasscodeCache } from "@features/reports/store/use-terminal-report-passcode-cache.ts";
 
 export interface ReportsTerminalProps {
   readonly merchantKey: string;
@@ -52,10 +53,19 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
   );
   const assignment = assignments.get(merchantKey) ?? null;
 
-  const shopKey = merchant != null ? (merchant.key.toLowerCase() as `0x${string}`) : null;
-  const indexState = useT3rminalReportIndex(shopKey);
+  const reportRef = useMemo<TerminalReportRef | null>(
+    () =>
+      merchant != null
+        ? {
+            shopKey: merchant.key.toLowerCase() as `0x${string}`,
+            merchantId: merchant.merchantId,
+            terminalId: merchant.terminalId,
+          }
+        : null,
+    [merchant],
+  );
+  const indexState = useT3rminalReportIndex(reportRef);
 
-  const [view, setView] = useState<ReportsViewId>("transactions");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [passcodeDraft, setPasscodeDraft] = useState("");
   const [showPasscode, setShowPasscode] = useState(false);
@@ -63,11 +73,15 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
   const [unlockNonce, setUnlockNonce] = useState(0);
   const [showUnlock, setShowUnlock] = useState(false);
 
+  const passcodeCache = useTerminalReportPasscodeCache();
+  const [autoTried, setAutoTried] = useState(false);
+
   const handleUnlock = () => {
     const trimmed = passcodeDraft.trim();
     if (trimmed.length === 0) return;
     // Derived-wire-password first (QR-flow), raw phrase second (typed on the
-    // terminal). Session-only — never persisted (processor passkey convention).
+    // terminal). The raw passcode is cached once it decrypts a report (see the
+    // persist effect below) so it isn't re-typed on the next visit.
     setSessionPasswords([deriveReportPasswordFromPasscode(trimmed), trimmed]);
     setUnlockNonce((n) => n + 1);
     setShowUnlock(false);
@@ -93,28 +107,37 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
 
   const entries = indexState.kind === "ready" ? indexState.index.entries : [];
 
-  // Hooks must precede early returns — compute the stream input up front
-  // even when the merchant resolves to "missing" / "wrong-kind". An empty
-  // terminal list is the correct fall-back for those branches anyway.
-  const streamTerminals = useMemo<ReadonlyArray<TransactionsStreamTerminal>>(
-    () =>
-      shopKey == null || merchant == null || merchant.kind !== "t3rminal"
-        ? []
-        : [
-            {
-              terminal: {
-                key: merchant.key,
-                name: merchant.name,
-                terminalId: merchant.terminalId,
-              },
-              shopKey,
-              reportPasswords: passwords,
-              unlockNonce,
-              entries,
-            },
-          ],
-    [shopKey, merchant, passwords, unlockNonce, entries],
-  );
+  const gatewayBase = resolveNetwork(envConfig.chain.network).ipfsGateway;
+  const reportQueries = useQueries({
+    queries: entries.map((entry) =>
+      decryptedReportQueryOptions(entry.metadata.cid, passwords, unlockNonce, gatewayBase),
+    ),
+  });
+  const reportResults = reportQueries.map((q) => q.data);
+  const anyReady = reportResults.some((r) => r != null && r.kind === "ready");
+
+  // Auto-restore a previously verified passcode — only when no QR assignment
+  // is on file (a QR-issued password already unlocks). Fires once after the
+  // cache hydrates.
+  useEffect(() => {
+    if (autoTried || !passcodeCache.hydrated) return;
+    setAutoTried(true);
+    if (assignment != null) return;
+    const cached = passcodeCache.getPasskey(merchantKey);
+    if (cached != null && cached.length > 0) {
+      setSessionPasswords([deriveReportPasswordFromPasscode(cached), cached]);
+      setUnlockNonce((n) => n + 1);
+    }
+  }, [autoTried, passcodeCache.hydrated, passcodeCache, assignment, merchantKey]);
+
+  // Persist the typed passcode once it actually decrypts a report. QR-unlocked
+  // terminals never cache (the assignment is the source of truth).
+  const typedPasscode = sessionPasswords.length > 0 ? (sessionPasswords[1] ?? null) : null;
+  useEffect(() => {
+    if (assignment != null || typedPasscode == null || typedPasscode.length === 0 || !anyReady) return;
+    if (passcodeCache.getPasskey(merchantKey) === typedPasscode) return;
+    passcodeCache.savePasskey(merchantKey, typedPasscode);
+  }, [assignment, typedPasscode, anyReady, passcodeCache, merchantKey]);
 
   const backToReports = () =>
     canGoBack ? router.history.back() : navigate({ to: "/reports" });
@@ -150,9 +173,6 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
       ? entries.find((entry) => entry.date === selectedDate) ?? null
       : null;
 
-  const gatewayBase = resolveNetwork(envConfig.chain.network).ipfsGateway;
-
-  const indexReady = indexState.kind === "ready";
   const indexFailed =
     indexState.kind === "error" || indexState.kind === "config-error";
 
@@ -200,18 +220,9 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
       )}
 
       <div style={{ height: 14 }} />
-      <ReportsViewToggle value={view} onChange={setView} />
-      <div style={{ height: 14 }} />
 
       {indexFailed ? (
         <IndexError state={indexState} />
-      ) : view === "transactions" ? (
-        <TransactionsView
-          terminals={streamTerminals}
-          hideTerminalColumn
-          gatewayBase={gatewayBase}
-          indexReady={indexReady}
-        />
       ) : (
         <DaysSegment
           state={indexState}
@@ -219,6 +230,7 @@ export function ReportsTerminal({ merchantKey }: ReportsTerminalProps) {
           selectedDate={selectedDate}
           selectedEntry={selectedEntry}
           passwords={passwords}
+          results={reportResults}
           unlockNonce={unlockNonce}
           onSelect={(date) => setSelectedDate(date)}
         />
@@ -294,6 +306,7 @@ function DaysSegment({
   selectedDate,
   selectedEntry,
   passwords,
+  results,
   unlockNonce,
   onSelect,
 }: {
@@ -302,6 +315,7 @@ function DaysSegment({
   selectedDate: string | null;
   selectedEntry: ReportIndexEntry | null;
   passwords: ReadonlyArray<string>;
+  results: ReadonlyArray<DecryptedReportLoadResult | undefined>;
   unlockNonce: number;
   onSelect: (date: string | null) => void;
 }) {
@@ -325,6 +339,8 @@ function DaysSegment({
       <DatesBody
         state={state}
         entries={entries}
+        results={results}
+        locked={passwords.length === 0}
         selectedDate={selectedDate}
         onSelect={onSelect}
       />
@@ -370,11 +386,15 @@ function IndexError({
 function DatesBody({
   state,
   entries,
+  results,
+  locked,
   selectedDate,
   onSelect,
 }: {
   state: TerminalReportIndexState;
   entries: ReadonlyArray<ReportIndexEntry>;
+  results: ReadonlyArray<DecryptedReportLoadResult | undefined>;
+  locked: boolean;
   selectedDate: string | null;
   onSelect: (date: string | null) => void;
 }) {
@@ -405,10 +425,12 @@ function DatesBody({
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {entries.map((entry) => (
+      {entries.map((entry, i) => (
         <ReportDateRow
           key={entry.date}
           entry={entry}
+          result={results[i]}
+          locked={locked}
           onClick={() =>
             onSelect(selectedDate === entry.date ? null : entry.date)
           }

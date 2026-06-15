@@ -8,7 +8,7 @@
  * passkey on the group page.
  */
 import { useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { shortAddr, formatIsoDateTime } from "@features/merchant/merchant-model.ts";
 import { ACard } from "@shared/components/primitives.tsx";
@@ -19,11 +19,15 @@ import {
 } from "@features/payment-processors/contracts/processor-config-queries.ts";
 import { processorListViewState } from "@features/payment-processors/payment-processor-model.ts";
 import { isDemoMode } from "@shared/lib/demo/demo-mode.ts";
+import { processorReportIndexQueryOptions } from "@features/reports/contracts/processor-report-queries.ts";
 
 export function ProcessorGroupsList() {
   const navigate = useNavigate();
   const query = useQuery(processorConfigRegistryQueryOptions());
   const rows = query.data ?? [];
+  const reportIndexQueries = useQueries({
+    queries: rows.map((r) => processorReportIndexQueryOptions(r.groupId)),
+  });
   const view = processorListViewState({
     isLoading: query.isLoading,
     isError: query.isError,
@@ -65,20 +69,54 @@ export function ProcessorGroupsList() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {rows.map((row) => (
-        <ACard
-          key={row.groupId}
-          onClick={() => navigate({ to: "/reports/processors/$groupId", params: { groupId: row.groupId } })}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ fontFamily: FONT.serif, fontSize: 16, color: COLOR.text }}>{row.groupId}</div>
-            <div style={{ fontSize: 11, color: COLOR.faint }}>{formatIsoDateTime(row.updatedAt)}</div>
-          </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: COLOR.faint }}>
-            Config {shortAddr(row.cid, 10, 8)}
-          </div>
-        </ACard>
-      ))}
+      {rows.map((row, i) => {
+        const q = reportIndexQueries[i];
+        const reportEntries = q?.data ?? [];
+        const count = reportEntries.length;
+        const mostRecent = reportEntries[0]?.committedAt ?? null;
+        return (
+          <ACard
+            key={row.groupId}
+            onClick={() => navigate({ to: "/reports/processors/$groupId", params: { groupId: row.groupId } })}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ fontFamily: FONT.serif, fontSize: 16, color: COLOR.text }}>{row.groupId}</div>
+              <div style={{ fontSize: 11, color: COLOR.faint }}>{formatIsoDateTime(row.updatedAt)}</div>
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, color: COLOR.faint }}>
+              Config {shortAddr(row.cid, 10, 8)}
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 11,
+                color: COLOR.text3,
+              }}
+            >
+              {q?.isLoading ? (
+                <span>Loading reports…</span>
+              ) : q?.isError ? (
+                <span>Couldn't load reports</span>
+              ) : count === 0 ? (
+                <span>No saved reports yet</span>
+              ) : (
+                <>
+                  <span>{`${count} saved report${count === 1 ? "" : "s"}`}</span>
+                  {mostRecent != null ? (
+                    <>
+                      <span style={{ color: COLOR.faint }}>·</span>
+                      <span>most recent {mostRecent.slice(0, 10)}</span>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </ACard>
+        );
+      })}
     </div>
   );
 }

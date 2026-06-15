@@ -25,6 +25,18 @@ export interface TerminalReportIndex {
   readonly entries: ReadonlyArray<ReportIndexEntry>;
 }
 
+/**
+ * Identity for one terminal's report lookups. `shopKey` is the client-side
+ * cache id (the registry terminalKey); `merchantId`/`terminalId` are the raw
+ * strings the contract's `(merchantId, terminalId)` slot key is built from and
+ * the arguments every view function actually takes.
+ */
+export interface TerminalReportRef {
+  readonly shopKey: `0x${string}`;
+  readonly merchantId: string;
+  readonly terminalId: string;
+}
+
 export type TerminalReportIndexState =
   | { readonly kind: "idle" }
   | { readonly kind: "loading" }
@@ -68,21 +80,21 @@ export function resolveBulletinIndexAddress(): `0x${string}` {
  * whether to surface those.
  */
 export async function fetchTerminalReportIndex(
-  shopKey: `0x${string}`,
+  ref: TerminalReportRef,
   address: `0x${string}` = resolveBulletinIndexAddress(),
 ): Promise<TerminalReportIndex> {
   const client = useMainClient().client;
   const origin = envConfig.chain.readOnlyOrigin;
-  const [dates] = await readContract<[ReadonlyArray<string>]>(client, {
+  const dates = await readContract<ReadonlyArray<string>>(client, {
     address,
     abi: T3rminalBulletinIndexABI,
     functionName: "getAllDates",
-    args: [shopKey],
+    args: [ref.merchantId, ref.terminalId],
     origin,
     at: "best",
   });
   if (dates.length === 0) {
-    return { shopKey, count: 0, entries: [] };
+    return { shopKey: ref.shopKey, count: 0, entries: [] };
   }
 
   const rawMetadatas = await Promise.all(
@@ -91,7 +103,7 @@ export async function fetchTerminalReportIndex(
         address,
         abi: T3rminalBulletinIndexABI,
         functionName: "getMetadata",
-        args: [shopKey, date],
+        args: [ref.merchantId, ref.terminalId, date],
         origin,
         at: "best",
       });
@@ -106,7 +118,7 @@ export async function fetchTerminalReportIndex(
     .filter((entry) => entry.metadata.exists)
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  return { shopKey, count: entries.length, entries };
+  return { shopKey: ref.shopKey, count: entries.length, entries };
 }
 
 /**
