@@ -9,6 +9,7 @@ import {
   shortTerminalId,
   T3RMINAL_TERMINAL_ID_PREFIX,
   t3rminalTerminalIdForDestination,
+  t3rminalTerminalIdFromInput,
   type MerchantForm,
   type RegistryMerchantRow,
 } from "@features/merchant/merchant-model.ts";
@@ -76,6 +77,32 @@ describe("t3rminalTerminalIdForDestination", () => {
     const id = t3rminalTerminalIdForDestination(ACCOUNT_ID32);
     expect(id).toBe(`${T3RMINAL_TERMINAL_ID_PREFIX}${ACCOUNT_ID32.slice(2)}`);
     expect(merchantKindFromTerminalId(id)).toBe("t3rminal");
+  });
+});
+
+describe("t3rminalTerminalIdFromInput", () => {
+  it("adds the t3r- prefix to a bare operator id", () => {
+    expect(t3rminalTerminalIdFromInput("front-counter")).toBe(
+      `${T3RMINAL_TERMINAL_ID_PREFIX}front-counter`,
+    );
+  });
+
+  it("does not double-prefix an id the operator already prefixed", () => {
+    expect(t3rminalTerminalIdFromInput("t3r-front-counter")).toBe(
+      `${T3RMINAL_TERMINAL_ID_PREFIX}front-counter`,
+    );
+  });
+
+  it("trims surrounding whitespace before prefixing", () => {
+    expect(t3rminalTerminalIdFromInput("  front-counter  ")).toBe(
+      `${T3RMINAL_TERMINAL_ID_PREFIX}front-counter`,
+    );
+  });
+
+  it("returns null when the body is empty", () => {
+    expect(t3rminalTerminalIdFromInput("")).toBeNull();
+    expect(t3rminalTerminalIdFromInput("   ")).toBeNull();
+    expect(t3rminalTerminalIdFromInput("t3r-")).toBeNull();
   });
 });
 
@@ -167,15 +194,38 @@ describe("buildRegisterMerchant", () => {
     });
   });
 
-  it("derives the t3rminal terminalId and default display name from the destination", () => {
-    const input = buildRegisterMerchant(form({ terminalId: "", displayName: "" }), [], "t3rminal");
+  it("prefixes the operator-entered t3rminal terminalId and defaults the display name", () => {
+    const input = buildRegisterMerchant(
+      form({ terminalId: "front-counter", displayName: "" }),
+      [],
+      "t3rminal",
+    );
     expect(input).toMatchObject({
       ok: true,
       payload: {
-        terminalId: t3rminalTerminalIdForDestination(ACCOUNT_ID32),
+        terminalId: `${T3RMINAL_TERMINAL_ID_PREFIX}front-counter`,
         displayName: defaultT3rminalDisplayName(ACCOUNT_ID32),
       },
     });
+  });
+
+  it("normalizes a t3rminal terminalId the operator already prefixed", () => {
+    const input = buildRegisterMerchant(
+      form({ terminalId: "t3r-front-counter" }),
+      [],
+      "t3rminal",
+    );
+    expect(input.ok && input.payload.terminalId).toBe(
+      `${T3RMINAL_TERMINAL_ID_PREFIX}front-counter`,
+    );
+  });
+
+  it("requires a t3rminal terminalId, prefix alone is not enough", () => {
+    for (const terminalId of ["  ", "t3r-"]) {
+      const input = buildRegisterMerchant(form({ terminalId }), [], "t3rminal");
+      expect(input.ok).toBe(false);
+      expect(!input.ok && input.errors.terminalId).toBe("Required.");
+    }
   });
 
   it("normalizes an SS58 destination to AccountId32 hex", () => {
@@ -191,12 +241,16 @@ describe("buildRegisterMerchant", () => {
     expect(!input.ok && input.errors.terminalId).toMatch(/already registered/);
   });
 
-  it("rejects a duplicate t3rminal destination on the destination field", () => {
-    const terminalId = t3rminalTerminalIdForDestination(ACCOUNT_ID32);
+  it("rejects a duplicate t3rminal terminalId on the terminalId field", () => {
+    const terminalId = `${T3RMINAL_TERMINAL_ID_PREFIX}front-counter`;
     const existing = [merchantFromRegistryRow(row({ terminalId }))];
-    const input = buildRegisterMerchant(form(), existing, "t3rminal");
+    const input = buildRegisterMerchant(
+      form({ terminalId: "front-counter" }),
+      existing,
+      "t3rminal",
+    );
     expect(input.ok).toBe(false);
-    expect(!input.ok && input.errors.destination).toMatch(/already registered/);
+    expect(!input.ok && input.errors.terminalId).toMatch(/already registered/);
   });
 
   it("allows the same terminalId under a different merchant", () => {

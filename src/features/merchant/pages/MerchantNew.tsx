@@ -62,7 +62,7 @@ export function MerchantNew({ mode }: MerchantNewProps) {
   const busy = registerMerchant.isPending;
   const isT3rminal = mode === "t3rminal";
   const disabled =
-    (!isT3rminal && !form.terminalId) ||
+    !form.terminalId ||
     !form.merchantId ||
     !form.destination ||
     busy;
@@ -139,8 +139,24 @@ export function MerchantNew({ mode }: MerchantNewProps) {
         />
       </AField>
 
-      {isT3rminal ? (
-        <AField label="Merchant ID" error={errors.merchantId} hint="Which merchant group this T3rminal joins.">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <AField
+          label="Terminal ID"
+          error={errors.terminalId}
+          hint={isT3rminal ? "t3r- is added for you." : undefined}
+        >
+          <AInput
+            value={form.terminalId}
+            onChange={(v) => setForm({ ...form, terminalId: v })}
+            placeholder={isT3rminal ? "front-counter" : "bar-east-01"}
+            mono
+          />
+        </AField>
+        <AField
+          label="Merchant ID"
+          error={errors.merchantId}
+          hint={isT3rminal ? "Merchant group this T3rminal joins." : undefined}
+        >
           <AInput
             value={form.merchantId}
             onChange={(v) => setForm({ ...form, merchantId: v })}
@@ -148,32 +164,13 @@ export function MerchantNew({ mode }: MerchantNewProps) {
             mono
           />
         </AField>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <AField label="Terminal ID" error={errors.terminalId}>
-            <AInput
-              value={form.terminalId}
-              onChange={(v) => setForm({ ...form, terminalId: v })}
-              placeholder="bar-east-01"
-              mono
-            />
-          </AField>
-          <AField label="Merchant ID" error={errors.merchantId}>
-            <AInput
-              value={form.merchantId}
-              onChange={(v) => setForm({ ...form, merchantId: v })}
-              placeholder="funkhaus"
-              mono
-            />
-          </AField>
-        </div>
-      )}
+      </div>
 
       <AField
         label={isT3rminal ? "T3rminal address" : "Payout destination"}
         hint={
           isT3rminal
-            ? "Paste the device's payout address. Scanning a QR will be wired in a follow-up. Accepts SS58, AccountId32 hex, or H160. The terminalId is derived from this."
+            ? "Paste the device's payout address. Scanning a QR will be wired in a follow-up. Accepts SS58, AccountId32 hex, or H160."
             : "Accepts an SS58 account, a 32-byte AccountId32 hex, or a revive H160. Normalized to AccountId32 on chain."
         }
         error={errors.destination}

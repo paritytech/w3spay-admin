@@ -17,9 +17,11 @@ export type MerchantLifecycle = "active" | "paused" | "revoked";
 export type MerchantKind = "pos" | "t3rminal";
 
 /**
- * Tags a T3rminal device's `terminalId`: `${T3RMINAL_TERMINAL_ID_PREFIX}{accountId32 hex without 0x}`.
- * Embedding the destination yields a deterministic, collision-free id under the
- * contract's `(merchantId, terminalId)` uniqueness key.
+ * `T3RMINAL_TERMINAL_ID_PREFIX` is the sole on-read marker that classifies a
+ * row as a T3rminal device — kind is not stored on-chain, so every T3rminal
+ * `terminalId` MUST carry it. The suffix is operator-chosen at registration
+ * (normalized via `t3rminalTerminalIdFromInput`); `t3rminalTerminalIdForDestination`
+ * derives one from a destination for demo seed data.
  */
 export const T3RMINAL_TERMINAL_ID_PREFIX = "t3r-";
 
@@ -29,6 +31,22 @@ export function merchantKindFromTerminalId(terminalId: string): MerchantKind {
 
 export function t3rminalTerminalIdForDestination(accountId32: AccountId32Hex): string {
   return `${T3RMINAL_TERMINAL_ID_PREFIX}${accountId32.slice(2).toLowerCase()}`;
+}
+
+/**
+ * Normalize an operator-entered T3rminal terminalId so it carries exactly one
+ * `t3r-` prefix. Accepts input with or without the prefix, so `front-counter`
+ * and `t3r-front-counter` both yield `t3r-front-counter`. Returns `null` when
+ * the body is empty (nothing after the prefix).
+ */
+export function t3rminalTerminalIdFromInput(input: string): string | null {
+  const trimmed = input.trim();
+  const body = (
+    trimmed.startsWith(T3RMINAL_TERMINAL_ID_PREFIX)
+      ? trimmed.slice(T3RMINAL_TERMINAL_ID_PREFIX.length)
+      : trimmed
+  ).trim();
+  return body === "" ? null : `${T3RMINAL_TERMINAL_ID_PREFIX}${body}`;
 }
 
 /**
@@ -69,8 +87,9 @@ export type RegisterMerchantInput =
 
 /**
  * Validate a merchant form and build the `registerMerchant` payload.
- * For T3rminal devices the terminalId is derived from the destination and
- * the display name defaults to `defaultT3rminalDisplayName`.
+ * For T3rminal devices the operator-entered terminalId is normalized to carry
+ * the `t3r-` prefix; the display name defaults to `defaultT3rminalDisplayName`
+ * when left blank.
  */
 export function buildRegisterMerchant(
   form: MerchantForm,
@@ -90,8 +109,11 @@ export function buildRegisterMerchant(
 
   let terminalId = "";
   if (kind === "t3rminal") {
-    if (destinationAccountId != null) {
-      terminalId = t3rminalTerminalIdForDestination(destinationAccountId);
+    const normalized = t3rminalTerminalIdFromInput(form.terminalId);
+    if (normalized == null) {
+      errors.terminalId = "Required.";
+    } else {
+      terminalId = normalized;
     }
   } else {
     terminalId = form.terminalId.trim();
@@ -102,11 +124,10 @@ export function buildRegisterMerchant(
     terminalId !== "" &&
     merchants.some((m) => m.terminalId === terminalId && m.merchantId === merchantId)
   ) {
-    if (kind === "t3rminal") {
-      errors.destination = "This T3rminal device is already registered under this merchant.";
-    } else {
-      errors.terminalId = "This (merchantId, terminalId) pair is already registered.";
-    }
+    errors.terminalId =
+      kind === "t3rminal"
+        ? "This T3rminal ID is already registered under this merchant."
+        : "This (merchantId, terminalId) pair is already registered.";
   }
 
   if (destinationAccountId == null || Object.keys(errors).length > 0) {

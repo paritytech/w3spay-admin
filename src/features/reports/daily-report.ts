@@ -150,36 +150,67 @@ function parseItems(raw: ReadonlyArray<unknown>): ReadonlyArray<DailyReportItem>
 }
 
 /**
- * Spreadsheet export — one CSV row per transaction, flat columns only
- * (itemised lines stay in the JSON export). Mirrors `processorReportToCsv`
- * so books reconcile across report kinds.
+ * Spreadsheet export — one CSV row per *item line*; sales without itemised
+ * lines collapse to a single "(amount only)" row. Column-for-column identical
+ * to the t3rminal producer's own export (`settings/export`, `daily-reports`)
+ * so the same workbook reconciles across both apps.
  */
 export function dailyReportToCsv(report: DailyReport): string {
   const header =
-    "sale_id,status,terminal_id,asset,amount,amount_formatted,block_number,timestamp,tx_hash,evm_merchant,evm_customer,refund_of";
-  const rows = report.transactions.map((tx) =>
-    csvRow([
-      tx.saleId,
-      tx.status,
-      tx.terminalId,
-      tx.asset,
-      tx.amount,
-      tx.amountFormatted,
-      tx.blockNumber,
-      isoFromMillis(tx.timestamp),
-      tx.txHash,
-      tx.evmMerchant,
-      tx.evmCustomer,
-      tx.refundOf ?? "",
-    ]),
-  );
+    "Sale ID,Timestamp,Timestamp Formatted,Status,Item,Quantity,Unit Price,Line Total,Asset,Merchant,Customer,Tx Hash,Block Number";
+  const rows: string[] = [];
+  for (const tx of report.transactions) {
+    const merchant = tx.originalMerchant || tx.evmMerchant;
+    const customer = tx.originalCustomer || tx.evmCustomer;
+    const lines =
+      tx.items && tx.items.length > 0
+        ? tx.items.map((item) => ({
+            name: item.name,
+            quantity: String(item.quantity),
+            unitPrice: money2(item.unitPrice),
+            lineTotal: lineTotalOf(item.unitPrice, item.quantity),
+          }))
+        : [
+            {
+              name: "(amount only)",
+              quantity: "1",
+              unitPrice: money2(tx.amountFormatted),
+              lineTotal: money2(tx.amountFormatted),
+            },
+          ];
+    for (const line of lines) {
+      rows.push(
+        csvRow([
+          tx.saleId,
+          tx.timestamp,
+          tx.timestampFormatted,
+          tx.status,
+          line.name,
+          line.quantity,
+          line.unitPrice,
+          line.lineTotal,
+          tx.asset,
+          merchant,
+          customer,
+          tx.txHash,
+          tx.blockNumber,
+        ]),
+      );
+    }
+  }
   return [header, ...rows].join("\n");
 }
 
-/** Producer timestamps are unix-millis strings; render ISO when parseable. */
-function isoFromMillis(raw: string): string {
-  const ms = Number(raw);
-  return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : raw;
+/** Mirror the producer's money formatting: 2 decimals, original string when NaN. */
+function money2(amount: string): string {
+  const n = Number(amount);
+  return Number.isFinite(n) ? n.toFixed(2) : amount;
+}
+
+/** unitPrice × quantity to 2 decimals; empty when the price isn't numeric. */
+function lineTotalOf(unitPrice: string, quantity: number): string {
+  const n = Number(unitPrice);
+  return Number.isFinite(n) ? (n * quantity).toFixed(2) : "";
 }
 
 export interface DailyReportAssetTotal {
